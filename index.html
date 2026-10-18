@@ -1,0 +1,494 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>breathe</title>
+<meta name="description" content="Two slow minutes with a plastic bag that only moves to your breath.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&display=swap" rel="stylesheet">
+<style>
+  /* ---- palette: adjust by hand ---- */
+  :root {
+    --sky: #EFE6D5;      /* sunlit lime-wash sand */
+    --bag: #C34811;      /* burnt orange */
+    --ink: #0B369A;      /* deep blue: released letters and text */
+    --horizon: #1D6813;  /* deep green: the distant horizon line */
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--sky);
+    color: var(--ink);
+    font-family: 'Special Elite', 'Courier Prime', 'Courier New', monospace;
+    overflow: hidden;
+  }
+  body.quiet { cursor: none; }
+
+  #scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+  .panel {
+    position: fixed; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    padding: 0 24px;
+    opacity: 0;
+    transition: opacity 1.6s ease;
+    pointer-events: none;
+  }
+  .panel.show { opacity: 1; pointer-events: auto; }
+
+  form {
+    width: min(30rem, 100%);
+    margin-top: -12vh;
+    display: flex; flex-direction: column; gap: 1.6rem;
+    font-size: clamp(1rem, 2.4vw, 1.25rem);
+    line-height: 1.5;
+  }
+  form p, form label { margin: 0; }
+  label { margin-bottom: -0.8rem !important; }
+  input {
+    font: inherit; color: inherit;
+    background: transparent;
+    border: 0; border-bottom: 1px solid var(--ink);
+    border-radius: 0;
+    padding: 0.3rem 0;
+    outline: none;
+    caret-color: var(--ink);
+  }
+  input::selection { background: var(--ink); color: var(--sky); }
+  button {
+    align-self: flex-start;
+    font: inherit; color: inherit;
+    background: none; border: 0; padding: 0;
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.3em;
+  }
+  button:hover, button:focus-visible { text-decoration-thickness: 2px; outline: none; }
+
+  .msg {
+    margin: 0;
+    margin-top: -12vh;
+    font-size: clamp(1rem, 2.4vw, 1.25rem);
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="scene"></canvas>
+
+<main id="intro" class="panel">
+  <form id="form" autocomplete="off">
+    <label for="words">what do you want to let go of?</label>
+    <input id="words" maxlength="60" spellcheck="false">
+    <p>breathe out slowly. the bag will listen.</p>
+    <button type="submit">begin</button>
+  </form>
+</main>
+<p id="calibrate" class="panel msg" hidden>stay quiet for a moment.</p>
+<p id="nomic" class="panel msg" hidden>no microphone. hold the spacebar to breathe out.</p>
+<p id="end" class="panel msg" hidden>let go.</p>
+
+<script>
+// ---------- timing ----------
+const EXPERIENCE_SECONDS = 120;   // length of the experience
+const CALIBRATION_SECONDS = 3.5;  // listening to the room
+const FADE_FROM = 0.72;           // fraction of the experience when the bag starts to fade
+
+// ---------- helpers ----------
+const $ = s => document.querySelector(s);
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const rand = (a, b) => a + Math.random() * (b - a);
+const smoothstep = (a, b, v) => { const t = clamp((v - a) / (b - a)); return t * t * (3 - 2 * t); };
+// frame-rate independent easing toward a target
+const approach = (cur, target, rate, dt) => cur + (target - cur) * (1 - Math.exp(-rate * dt));
+// slow organic wobble in roughly [-1, 1]
+const wobble = (t, s) => Math.sin(t * 0.71 + s) * 0.5 + Math.sin(t * 1.33 + s * 2.1) * 0.3 + Math.sin(t * 2.17 + s * 3.7) * 0.2;
+
+function fadeIn(el) { el.hidden = false; requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('show'))); }
+function fadeOut(el) { el.classList.remove('show'); setTimeout(() => { if (!el.classList.contains('show')) el.hidden = true; }, 1700); }
+
+const css = getComputedStyle(document.documentElement);
+const color = name => css.getPropertyValue(name).trim();
+const FONT = "'Special Elite', 'Courier Prime', 'Courier New', monospace";
+
+// ---------- canvas ----------
+const canvas = $('#scene');
+const ctx = canvas.getContext('2d');
+let W = 0, H = 0, horizonY = 0, bagW = 0, bagH = 0;
+const PIVOT = 0.28; // the bag hangs and turns around a point near its handles
+
+function resize() {
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  W = innerWidth; H = innerHeight;
+  canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  horizonY = Math.round(H * 0.8);
+  bagH = Math.min(H * 0.4, W * 0.6);
+  bagW = bagH * (bagImg.naturalWidth ? bagImg.naturalWidth / bagImg.naturalHeight : 0.75);
+}
+
+// ---------- the bag image, tinted to --bag ----------
+// bag.png holds the plastic's density as alpha and its creases as gray;
+// multiplying by the bag color keeps the creases deeper and the thin parts see-through.
+const bagImg = new Image();
+let bagTint = null;
+bagImg.onload = () => {
+  const c = document.createElement('canvas');
+  c.width = bagImg.naturalWidth; c.height = bagImg.naturalHeight;
+  const g = c.getContext('2d');
+  g.drawImage(bagImg, 0, 0);
+  g.globalCompositeOperation = 'multiply';
+  g.fillStyle = color('--bag');
+  g.fillRect(0, 0, c.width, c.height);
+  g.globalCompositeOperation = 'destination-in';
+  g.drawImage(bagImg, 0, 0);
+  bagTint = c;
+  resize();
+};
+bagImg.src = 'bag.png';
+
+// ---------- state ----------
+let phase = 'intro';  // intro → calibrating → (waiting) → live → ending → done
+let elapsed = 0;      // seconds into the experience
+let endTime = 0;
+let queue = [];       // letters still held by the bag
+let total = 0;
+let releaseAcc = 0;
+const letters = [];
+
+const bag = {
+  x: 0, y: 0, vx: 0, vy: 0,
+  rot: 0, av: 0,
+  chaos: 0, lightness: 0, opacity: 0, sway: 1,
+  sx: 1, sy: 1,
+};
+let wind = { x: 1, y: -0.2 };
+
+// ---------- breath ----------
+const breath = {
+  mode: 'none',        // 'mic' or 'key'
+  analyser: null, buf: null,
+  baseline: 0, thrOn: 0, thrOff: 0, ref: 0.05,
+  level: 0, above: 0, below: 0,
+  exhaling: false, start: 0, dur: 0,
+  force: 0,            // how hard (0..1), drives chaos
+  intensity: 0,        // smoothed strength of the breath (0..1), drives drift
+  spaceHeld: false,
+  samples: [], calStart: 0,
+};
+
+function readRMS() {
+  const b = breath.buf;
+  breath.analyser.getFloatTimeDomainData(b);
+  let s = 0;
+  for (let i = 0; i < b.length; i++) s += b[i] * b[i];
+  return Math.sqrt(s / b.length);
+}
+
+function finishCalibration() {
+  const s = breath.samples.sort((a, b) => a - b);
+  const median = s[Math.floor(s.length * 0.5)] || 0;
+  const p90 = s[Math.floor(s.length * 0.9)] || 0;
+  const noise = Math.max(p90 - median, median * 0.25);
+  breath.baseline = median;
+  breath.thrOn = median + Math.max(noise * 3, median * 0.6, 0.004);
+  breath.thrOff = median + (breath.thrOn - median) * 0.5;
+  breath.ref = Math.max(0.02, (breath.thrOn - median) * 6);
+  breath.level = median;
+}
+
+function startExhale(now) {
+  breath.exhaling = true;
+  breath.start = now;
+  releaseAcc = 0.7; // the first letter comes loose almost at once
+  // blow back toward the open side of the screen, slightly upward
+  const off = (bag.x - W / 2) / (W / 2);
+  const side = Math.abs(off) > 0.3 ? -Math.sign(off) : (Math.random() < 0.5 ? -1 : 1);
+  const a = -0.1 - Math.random() * 0.2;
+  wind = { x: side * Math.cos(a), y: Math.sin(a) };
+}
+
+function updateBreath(dt, now) {
+  const listening = phase === 'live';
+  let rawForce = 0;
+
+  if (breath.mode === 'mic') {
+    const r = readRMS();
+    breath.level = approach(breath.level, r, r > breath.level ? 14 : 5, dt);
+    const excess = Math.max(0, breath.level - breath.baseline);
+    // adapt the "hard" reference to the strongest breaths seen, slowly relaxing
+    const refMin = Math.max(0.02, (breath.thrOn - breath.baseline) * 6);
+    breath.ref = Math.max(refMin, breath.ref * Math.exp(-0.02 * dt));
+    if (excess > breath.ref) breath.ref = approach(breath.ref, excess, 1.5, dt);
+    rawForce = clamp(excess / breath.ref);
+
+    if (!breath.exhaling) {
+      breath.above = breath.level > breath.thrOn ? breath.above + dt : 0;
+      if (listening && breath.above > 0.08) startExhale(now);
+    } else {
+      breath.below = breath.level < breath.thrOff ? breath.below + dt : 0;
+      if (breath.below > 0.18 || !listening) { breath.exhaling = false; breath.below = 0; }
+    }
+  } else if (breath.mode === 'key') {
+    rawForce = 0.3; // the spacebar is always a gentle breath
+    if (breath.spaceHeld && listening && !breath.exhaling) startExhale(now);
+    if ((!breath.spaceHeld || !listening) && breath.exhaling) breath.exhaling = false;
+  }
+
+  if (breath.exhaling) breath.dur = now - breath.start;
+  const on = breath.exhaling;
+  breath.force = approach(breath.force, on ? rawForce : 0, 6, dt);
+  breath.intensity = approach(breath.intensity, on ? 0.35 + 0.65 * rawForce : 0, on ? 2.2 : 1.2, dt);
+}
+
+// ---------- letters ----------
+function releaseLetter(gentle) {
+  if (!queue.length) return;
+  const ch = queue.shift();
+  const carry = clamp(breath.dur / 6);
+  const c = bag.chaos;
+  // a point somewhere on the bag's body, following its rotation
+  const ox = rand(-0.22, 0.22) * bagW * bag.sx;
+  const oy = rand(0.05, 0.55) * bagH * bag.sy;
+  const cos = Math.cos(bag.rot), sin = Math.sin(bag.rot);
+  let angle, speed, life;
+  if (gentle) {
+    angle = -Math.PI / 2 + rand(-0.9, 0.9);
+    speed = rand(18, 40);
+    life = rand(5, 7);
+  } else {
+    angle = Math.atan2(wind.y, wind.x) + rand(-0.5, 0.5) * (0.35 + c * 2.4);
+    speed = (50 + breath.intensity * 60 + carry * 120) * rand(0.7, 1.3);
+    life = (3.5 + carry * 6) * (1 - c * 0.3) * rand(0.85, 1.15);
+  }
+  letters.push({
+    ch,
+    x: bag.x + ox * cos - oy * sin,
+    y: bag.y + ox * sin + oy * cos,
+    vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+    rot: rand(-0.25, 0.25), spin: rand(-0.5, 0.5) * (0.6 + c * 5),
+    size: bagH * rand(0.065, 0.105),
+    alpha: rand(0.65, 1),
+    age: 0, life,
+    seed: rand(0, 100),
+  });
+}
+
+function updateLetters(dt, t) {
+  for (let i = letters.length - 1; i >= 0; i--) {
+    const l = letters[i];
+    l.age += dt;
+    if (l.age > l.life) { letters.splice(i, 1); continue; }
+    const drag = Math.exp(-0.25 * dt);
+    l.vx = l.vx * drag + (wobble(t * 1.3, l.seed) * 14 + wind.x * breath.intensity * 40) * dt;
+    l.vy = l.vy * drag + (wobble(t * 1.1, l.seed + 3) * 14 - 6) * dt;
+    l.x += l.vx * dt; l.y += l.vy * dt;
+    l.spin *= Math.exp(-0.15 * dt);
+    l.rot += l.spin * dt;
+  }
+}
+
+function drawLetters() {
+  ctx.fillStyle = color('--ink');
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (const l of letters) {
+    const a = l.alpha * smoothstep(0, 0.25, l.age) * (1 - smoothstep(l.life * 0.5, l.life, l.age));
+    if (a <= 0.003) continue;
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.translate(l.x, l.y);
+    ctx.rotate(l.rot);
+    ctx.font = `${l.size.toFixed(1)}px ${FONT}`;
+    ctx.fillText(l.ch, 0, 0);
+    ctx.restore();
+  }
+}
+
+// ---------- the bag ----------
+function updateBag(dt, t) {
+  const progress = clamp(elapsed / EXPERIENCE_SECONDS);
+  const released = total ? (total - queue.length) / total : progress;
+  bag.lightness = approach(bag.lightness, 0.8 * released + 0.2 * progress, 0.6, dt);
+  const L = bag.lightness;
+  const buoy = 0.45 + 0.55 * L;          // heavy at first, lighter as the words leave
+  const I = breath.intensity;
+  const carry = 0.5 + Math.min(breath.dur, 6) * 0.3; // duration of the exhale = distance
+
+  // force of the exhale = chaos; slow breaths stay calm
+  const chaosTarget = breath.exhaling ? Math.pow(clamp((breath.force - 0.4) / 0.6), 1.4) : 0;
+  bag.chaos = approach(bag.chaos, chaosTarget, chaosTarget > bag.chaos ? 5 : 1, dt);
+
+  if (phase === 'ending' || phase === 'done') {
+    // the breath no longer reaches it: it sinks and rests on the horizon
+    const restY = horizonY - (0.95 - PIVOT) * bagH * bag.sy;
+    bag.vx = approach(bag.vx, 0, 1.5, dt);
+    bag.vy = 0;
+    bag.x = clamp(bag.x + bag.vx * dt, bagW * 0.6, W - bagW * 0.6);
+    bag.y = approach(bag.y, restY, 0.35, dt);
+    bag.sway = approach(bag.sway, 0, 0.45, dt);
+    bag.chaos = approach(bag.chaos, 0, 2, dt);
+  } else {
+    const restY = H * (0.36 + 0.14 * (1 - L));
+    let ax = wind.x * I * 150 * carry * buoy + (W / 2 - bag.x) * 0.06;
+    let ay = (wind.y * I * 150 * carry - I * 90) * buoy + (restY - bag.y) * 0.9;
+    // soft edges keep it in view
+    const m = bagW * 0.6;
+    if (bag.x < m) ax += (m - bag.x) * 3;
+    if (bag.x > W - m) ax -= (bag.x - (W - m)) * 3;
+    if (bag.y < bagH * 0.3) ay += (bagH * 0.3 - bag.y) * 3;
+    bag.vx = (bag.vx + ax * dt) * Math.exp(-0.9 * dt);
+    bag.vy = (bag.vy + ay * dt) * Math.exp(-1.4 * dt);
+    bag.x += bag.vx * dt;
+    bag.y += bag.vy * dt;
+  }
+
+  // rotation: idle sway, a tilt into the motion, and spin when the breath is hard
+  const s = bag.sway;
+  const rotTarget = (phase === 'ending' || phase === 'done') ? 0.04 : wobble(t * 0.6, 3) * 0.07 * s + clamp(bag.vx * 0.0012, -0.3, 0.3);
+  const torque = (rotTarget - bag.rot) * 5 - bag.av * 2.2 + bag.chaos * wobble(t * 4.3, 5) * 14;
+  bag.av += torque * dt;
+  bag.rot += bag.av * dt;
+
+  // crumpled at first, opening up as it gets lighter; flutters when the breath is hard
+  bag.sx = (0.93 + 0.07 * L) * (1 + 0.015 * wobble(t * 0.9, 7) * s + bag.chaos * 0.07 * Math.sin(t * 23));
+  bag.sy = (0.9 + 0.1 * L) * (1 + 0.02 * wobble(t * 0.7, 8) * s + I * 0.03 - bag.chaos * 0.05 * Math.sin(t * 19 + 1));
+
+  // fade in, then slowly toward the sky near the end
+  let target = 1 - 0.45 * smoothstep(FADE_FROM, 1, progress);
+  if (phase === 'ending' || phase === 'done') target = 0.5;
+  bag.opacity = approach(bag.opacity, target, phase === 'live' && elapsed < 4 ? 0.8 : 0.5, dt);
+}
+
+function drawBag(t) {
+  if (!bagTint || bag.opacity < 0.003) return;
+  const s = bag.sway;
+  const jx = wobble(t * 0.5, 1) * 12 * s + bag.chaos * wobble(t * 7, 11) * 10;
+  const jy = wobble(t * 0.4, 2) * 8 * s + bag.chaos * wobble(t * 6, 13) * 8;
+  ctx.save();
+  ctx.globalAlpha = bag.opacity;
+  ctx.translate(bag.x + jx, bag.y + jy);
+  ctx.rotate(bag.rot);
+  ctx.scale(bag.sx, bag.sy);
+  ctx.drawImage(bagTint, -bagW / 2, -PIVOT * bagH, bagW, bagH);
+  ctx.restore();
+}
+
+// ---------- flow ----------
+let audioCtx = null;
+const form = $('#form'), input = $('#words');
+
+form.addEventListener('submit', async e => {
+  e.preventDefault();
+  const words = input.value.trim();
+  if (!words) { input.focus(); return; }
+  queue = [...words].filter(c => c.trim());
+  total = queue.length;
+  input.blur();
+  fadeOut($('#intro'));
+
+  try {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+    });
+    await audioCtx.resume();
+    const analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 2048;
+    audioCtx.createMediaStreamSource(stream).connect(analyser);
+    breath.analyser = analyser;
+    breath.buf = new Float32Array(analyser.fftSize);
+    breath.mode = 'mic';
+    setTimeout(() => {
+      fadeIn($('#calibrate'));
+      breath.samples = [];
+      breath.calStart = performance.now() / 1000 + 0.8;
+      phase = 'calibrating';
+    }, 1200);
+  } catch (err) {
+    breath.mode = 'key';
+    setTimeout(() => { fadeIn($('#nomic')); phase = 'waiting'; }, 1200);
+  }
+});
+
+addEventListener('keydown', e => {
+  if (e.code !== 'Space' || phase === 'intro') return;
+  e.preventDefault();
+  if (breath.mode !== 'key') return;
+  breath.spaceHeld = true;
+  if (phase === 'waiting') { fadeOut($('#nomic')); breath.spaceHeld = false; setTimeout(startExperience, 1600); phase = 'pre'; }
+});
+addEventListener('keyup', e => { if (e.code === 'Space') breath.spaceHeld = false; });
+
+function startExperience() {
+  phase = 'live';
+  elapsed = 0;
+  bag.x = W / 2; bag.y = H * 0.5; bag.vx = bag.vy = 0;
+  bag.opacity = 0;
+  document.body.classList.add('quiet');
+}
+
+// ---------- loop ----------
+let last = performance.now() / 1000;
+function frame() {
+  const now = performance.now() / 1000;
+  const dt = Math.min(0.05, now - last);
+  last = now;
+
+  if (phase === 'calibrating' && now >= breath.calStart) {
+    breath.samples.push(readRMS());
+    if (now - breath.calStart > CALIBRATION_SECONDS) {
+      finishCalibration();
+      fadeOut($('#calibrate'));
+      phase = 'pre';
+      setTimeout(startExperience, 1600);
+    }
+  }
+
+  if (phase === 'live') {
+    elapsed += dt;
+    if (elapsed >= EXPERIENCE_SECONDS) { phase = 'ending'; endTime = now; }
+  }
+
+  updateBreath(dt, now);
+
+  if (phase === 'live' && breath.exhaling && queue.length) {
+    // long, gentle exhales release more letters
+    const base = clamp(total / 35, 0.9, 5);
+    const rate = base * (0.5 + breath.intensity) * (0.6 + Math.min(breath.dur, 6) * 0.25);
+    releaseAcc += rate * dt;
+    while (releaseAcc >= 1 && queue.length) { releaseAcc -= 1; releaseLetter(false); }
+  }
+  if (phase === 'ending' && queue.length) {
+    // whatever is left drifts out softly as the bag sinks
+    releaseAcc += Math.max(1.5, queue.length / 5) * dt;
+    while (releaseAcc >= 1 && queue.length) { releaseAcc -= 1; releaseLetter(true); }
+  }
+  if (phase === 'ending' && !queue.length && !letters.length && now - endTime > 8) {
+    phase = 'done';
+    setTimeout(() => fadeIn($('#end')), 1500);
+  }
+
+  const live = phase === 'live' || phase === 'ending' || phase === 'done';
+  if (live) { updateBag(dt, now); updateLetters(dt, now); }
+
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = color('--horizon');
+  ctx.fillRect(0, horizonY, W, 1.5);
+  if (live) { drawBag(now); drawLetters(); }
+
+  requestAnimationFrame(frame);
+}
+
+addEventListener('resize', resize);
+resize();
+requestAnimationFrame(frame);
+fadeIn($('#intro'));
+input.focus();
+</script>
+</body>
+</html>
