@@ -1,157 +1,77 @@
-# breathe
+# Aliento
 
-A one-page interactive piece for the assignment *a page with a constraint*.
-
-## The constraint
-
-**The page only moves to your breath.**
-
-There is nothing to click, scroll or tap once it begins. The only input is the
-sound of you breathing out.
+*A page with a constraint.*
 
 ## Concept
 
-This is a short break from screens. After hours of work, you spend about two
-minutes with a single plastic bag floating in a quiet, empty space. Before you
-begin, you type a few words for what you want to let go of: *work stress*,
-*the deadline*, a name, a feeling. Those words are held by the bag. Every time
-you exhale, letters break loose from it and blow away.
+In Spanish, *aliento* means both breath and encouragement. Advice from an elder is aliento in both senses: it is given with their breath, and it keeps us going. This page keeps the memories and advice of elders, living or dead, so that younger generations carry forward the people who came before them.
 
-Screens use our attention the way we use plastic bags: briefly, carelessly,
-and then they throw it away. This page turns that around. For two slow
-minutes, the screen asks for nothing but your breath, and what you let go of
-is something you chose.
+The visitor sees an old hand. They write something an elder told them, a memory or a piece of advice, into a band of light across the back of the hand. Then they breathe on the screen. The words become light, travel up one of the fingers and leave the fingertip. Then they become part of a luminous memory tree growing behind the hand. Each memory adds a ring at the base of the tree, the way tree rings record years and wrinkles record a life.
+
+The hand is photographic, grayscale and still: it belongs to the body. The tree is digital and glowing: it is an archive. The space between them is the subject of the piece, memory leaving the body and becoming something that lasts.
+
+## The constraint
+
+**A memory can only be released with your breath.**
+
+There is no submit button. Typing a memory is not enough. To let it go, you have to give it your own breath, the way an elder once gave it theirs.
 
 ## The experience
 
-**1. The question.** The page opens on a sunlit, sand-colored space with a few
-lines of typewriter text:
+**Opening.** The page begins on a dark screen with a single word: *aliento*. Clicking it asks for permission to use the microphone. A short bilingual line, *silencio… / quiet…*, holds the room for a few seconds while the page listens to its silence and learns how loud the room is. Then the hand fades in.
 
-> what do you want to let go of?
->
-> breathe out slowly. the bag will listen.
+**The hand.** The elder's hand, cut out from its photograph, rests on a dark background. A soft band of light lies across the back of the hand, near the wrist. That band is where the visitor writes. There is no navigation and no title, only the hand, the light and the tree behind it.
 
-You type your words and press *begin*, and the browser asks for permission to
-use the microphone.
+**Writing.** The visitor types a memory directly into the band of light. When they press Enter, the band clears and quietly asks *¿de quién? / from whom?*. They can name the elder ("mi abuela", "my grandfather") or skip this and breathe straight away. Once there is something to release, the band glows stronger and the page waits.
 
-**2. Calibration.** One line appears: *stay quiet for a moment.* For a few
-seconds the page listens to the room so it can tell your breath apart from the
-hum of a laptop fan, traffic or air conditioning.
+**Breathing.** When the visitor exhales onto the screen, the text dissolves into light. The light travels from the band up through one finger and leaves the fingertip. The fingers take turns in order: the first memory leaves through the thumb, the next through the index finger, then the middle, ring and little fingers, and then the thumb again, like counting on your fingers. A long, gentle exhale carries the light smoothly. A short, sharp one moves it in a quicker, less even way.
 
-**3. The bag.** Then all text disappears, and only the bag remains, with a
-thin green line of horizon far below. It is never completely still: it
-sways, turns slightly and breathes a little on its own. When you breathe in
-or stay silent, it hangs in the air and flutters gently.
+**The tree.** There is a single tree, standing behind the hand on a black ground. The light flies into the background and joins it. A new ring ripples outward across the ground from its trunk, and the canopy grows a little denser. The rings are fine, concentric lines in iridescent magenta, cyan, yellow and lavender, spreading like ripples in water around the base of the trunk and behind the wrist of the hand. The canopy is soft and blue-violet, dissolving into vertical scanlines and faint glyph-like dashes, as if the tree were being read off a screen. Over time, as memories gather, the tree grows denser and brighter. It treats every elder the same, whether they are still alive or have died, because on this tree the memory is what keeps them present.
 
-When you breathe out, it moves:
+**Reading.** Hovering over a ring or a branch reveals the memory it holds in small text, along with who it came from when that was given.
 
-- **The longer the exhale, the further it goes.** A long, gentle breath
-  carries the bag smoothly across the space and releases more letters, which
-  travel far before they fade.
-- **The harder the exhale, the more chaotic it gets.** A sharp puff makes the
-  bag jolt, flutter and spin, and the letters scatter roughly.
+## Breath
 
-The piece rewards slow, long breaths. Breathing calmly is the way to get the
-most out of it.
+The page listens through the microphone using the Web Audio API and measures the volume of the incoming sound. During the opening silence it calibrates a baseline for the room. Afterwards it treats a sustained rise above that baseline as an exhale, and it smooths the signal so that a cough or a voice does not count as breath. The strength and length of the exhale shape how the light travels.
 
-Letters break off one at a time from your words. They appear in deep blue
-typewriter type, each slightly different in size, angle and opacity. They
-drift, rotate and fade as they leave. Nothing collects or piles up. They're
-released, not accumulated.
+If the visitor denies the microphone, holding the spacebar acts as a breath.
 
-**4. The bag changes.** At first the bag is crumpled and heavy, carrying your
-words. It sags low and barely lifts. As letters leave, it becomes more open
-and buoyant and answers your breath more easily. In the last part of the two
-minutes it also slowly fades, becoming more and more like the sky behind it.
+## Memories
 
-**5. The ending.** After about two minutes, breath stops moving the bag. It
-sinks slowly and comes to rest, empty, on the horizon line. After a pause, a
-last line of text fades in:
+The tree begins with seed memories written by the author, kept in `memories.json` so they can be edited at any time without touching the page. Each memory has this shape:
 
-> let go.
+```json
+{ "text": "...", "from": "my grandmother", "lang": "es" }
+```
 
-The page then stays still. There is no restart button. To begin again, reload
-the page.
-
-**Without a microphone.** If microphone access is denied or unavailable, a
-small line appears: *no microphone. hold the spacebar to breathe out.* Holding
-the spacebar then acts as an exhale, and the longer you hold it, the further
-the bag drifts.
-
-## Visual direction
-
-Still, warm and minimal, like late light on a white wall by the sea. The
-palette is Mediterranean, flat and saturated, with no pastels and no
-gradients: whitewashed walls, terracotta, blue tiles, cypress.
-
-| Role | Color | Hex |
-|---|---|---|
-| Sky / background | sunlit lime-wash sand | `#EFE6D5` |
-| Bag | burnt orange | `#C34811` |
-| Released letters | deep blue | `#0B369A` |
-| Horizon line | deep green | `#1D6813` |
-
-- **Only the bag is on screen** during the experience. There's no navigation
-  and no title, and the only text is the released letters.
-- **The bag** comes from a photograph of a real plastic bag, recolored to
-  burnt orange. Its translucency comes from the photo itself: the thin
-  plastic lets the sand-colored background glow through, and the creases,
-  folds and handles read as deeper orange.
-- **The letters** use a typewriter face (Special Elite).
-- **The green** is used only once, as a thin, distant horizon line low on the
-  screen. It's the only trace of land or sea.
-
-The four colors are defined as CSS variables at the top of `index.html` so
-they can be adjusted by hand.
-
-## How it works
-
-- **Breath detection:** The Web Audio API reads the microphone through an
-  `AnalyserNode`. Each frame, the page measures the loudness of the incoming
-  sound and compares it to the room's noise level measured during calibration.
-  Sound above that baseline counts as an exhale. The signal is smoothed so
-  the bag's movement eases in and out and never twitches.
-- **Two readings of each breath:** The *duration* of an exhale drives how far
-  the bag drifts and how many letters are released. The *force* (how loud it
-  is) drives turbulence: flutter, spin and scatter.
-- **Animation:** Everything is drawn in the browser with plain JavaScript on
-  a `requestAnimationFrame` loop. The bag photo is tinted and given its
-  transparency at load time, then swayed, rotated, scaled and drifted every
-  frame.
-- **No audio leaves the device.** The microphone is analyzed live in the
-  browser. Nothing is recorded, stored or sent anywhere.
+Memories left by visitors are saved in their own browser (localStorage) and grow on the same tree, after the seeds. They stay on that visitor's device, so each person who comes back finds their own memories still there. The page fills in `lang` automatically by guessing whether the memory is written in Spanish or English. Memories can be in either language.
 
 ## Files
 
-```
-index.html   the whole piece: HTML, CSS and JavaScript in one file
-bag.png      the photographed bag (the red bag from the source photo)
-README.md    this file
-```
+- `index.html`: the whole page, in plain HTML, CSS and JavaScript, with no frameworks and no build step.
+- `memories.json`: the seed memories.
+- `hand.png`: the hand photograph.
+- `hand-cutout.png`: the same hand with its gray background removed, used on the page.
+- `hand-labeled.png`: a map of the hand used during development, never shown on the page. It marks the fingers A (thumb) to E (little finger) and the input bar.
+- `tree-reference.png`: a style reference for the tree, never shown on the page.
 
-No frameworks, no build step, no API keys. The only external resource is the
-typewriter font from Google Fonts.
+Every position (the input bar, the five fingertips, the path up each finger) and every color lives in a single `CONFIG` object at the top of the script, so they can be adjusted by hand.
 
 ## Previewing locally
 
-Browsers only allow microphone access on secure pages, so opening
-`index.html` directly from the Finder (`file://…`) will not work. Serve the
-folder locally instead. In Terminal:
+Browsers only allow the microphone on a secure origin, so opening `index.html` by double-clicking it won't work. Instead, run a small local server from this folder:
 
 ```sh
-cd ~/Documents/GitHub/breathe
+cd ~/Documents/GitHub/aliento
 python3 -m http.server 8000
 ```
 
-Then open <http://localhost:8000> in Chrome, Safari or Firefox and allow
-microphone access when asked. Press `Ctrl+C` in Terminal to stop the server.
+Then open <http://localhost:8000> in the browser. `localhost` counts as secure, so the microphone prompt will appear.
 
-For best results, use headphones or a quiet room, and breathe toward the
-laptop's microphone from a short distance.
+To tune the breath detection, open <http://localhost:8000/?debug>. A small panel shows the microphone level, the room's baseline and the threshold a breath must cross. If gentle breaths aren't detected, raise `breath.sensitivity` in `CONFIG` (for example to `1.5` or `2`).
 
-## Hosting
+Visitor memories live in your browser's localStorage. To clear them while testing, run `localStorage.removeItem('aliento.memories')` in the browser console.
 
-The piece is hosted on GitHub Pages, which serves pages over HTTPS, so the
-microphone works there without any extra setup. In the repository settings,
-under **Pages**, set the source to the `main` branch and root folder. The
-site will be published at `https://<username>.github.io/breathe/`.
+## Publishing
+
+The site is hosted on GitHub Pages, which serves over HTTPS, so the microphone works there too. Push the folder to GitHub, then in the repository go to **Settings → Pages** and publish from the main branch.

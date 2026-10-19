@@ -1,494 +1,1029 @@
 <!doctype html>
-<html lang="en">
+<html lang="es">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>breathe</title>
-<meta name="description" content="Two slow minutes with a plastic bag that only moves to your breath.">
+<title>Aliento</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Special+Elite&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;1,300;1,400&family=Courier+Prime&family=Special+Elite&display=swap" rel="stylesheet">
 <style>
-  /* ---- palette: adjust by hand ---- */
-  :root {
-    --sky: #EFE6D5;      /* sunlit lime-wash sand */
-    --bag: #C34811;      /* burnt orange */
-    --ink: #0B369A;      /* deep blue: released letters and text */
-    --horizon: #1D6813;  /* deep green: the distant horizon line */
-  }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
+  body { -webkit-font-smoothing: antialiased; }
 
-  * { box-sizing: border-box; }
-  html, body { height: 100%; margin: 0; }
-  body {
-    background: var(--sky);
-    color: var(--ink);
-    font-family: 'Special Elite', 'Courier Prime', 'Courier New', monospace;
-    overflow: hidden;
+  canvas { position: fixed; left: 0; top: 0; }
+  #tree { z-index: 1; }
+  #scan {
+    position: fixed; inset: 0; z-index: 2; pointer-events: none;
+    background: repeating-linear-gradient(90deg, var(--scan) 0 1px, transparent 1px 3px);
   }
-  body.quiet { cursor: none; }
+  #hand { position: fixed; z-index: 3; pointer-events: none; user-select: none; -webkit-user-drag: none; }
+  #glow { position: fixed; z-index: 4; pointer-events: none; border-radius: 999px; mix-blend-mode: screen; }
+  #bar {
+    position: fixed; z-index: 5; box-sizing: border-box; margin: 0;
+    background: transparent; border: 0; outline: 0; border-radius: 999px;
+    font-family: 'Courier Prime', 'Courier New', monospace; text-align: center;
+    color: var(--ink); caret-color: var(--ink);
+  }
+  #bar::placeholder { color: var(--ink-soft); }
+  #bar[readonly] { caret-color: transparent; }
+  #fx { z-index: 6; pointer-events: none; }
+  #hint {
+    position: fixed; z-index: 6; left: 50%; bottom: 18px; transform: translateX(-50%);
+    width: max-content; max-width: calc(100vw - 32px); pointer-events: none;
+    font: 13px/1.6 'Courier Prime', 'Courier New', monospace; text-align: center; white-space: pre-line;
+    color: var(--hint); text-shadow: 0 0 10px var(--bg), 0 0 4px var(--bg), 0 0 2px var(--bg);
+    opacity: 0; transition: opacity 1.2s ease;
+  }
+  #tip {
+    position: fixed; z-index: 8; max-width: min(300px, 80vw); pointer-events: none;
+    font: 12px/1.55 'Courier Prime', 'Courier New', monospace; color: var(--tip);
+    text-shadow: 0 0 8px var(--bg), 0 0 2px var(--bg); opacity: 0; transition: opacity .35s ease;
+  }
+  #tip .from { display: block; margin-top: .35em; opacity: .6; }
 
-  #scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  #intro {
+    position: fixed; inset: 0; z-index: 10; background: var(--bg);
+    display: flex; align-items: center; justify-content: center; transition: opacity 2.4s ease;
+  }
+  #introText {
+    display: flex; flex-direction: column; align-items: center; padding: 0 16px;
+    transition: opacity 1.2s ease;
+  }
+  #introText.gone { opacity: 0; pointer-events: none; }
+  #intro button {
+    font: 400 clamp(40px, 7vw, 80px)/1 'Special Elite', 'Courier New', monospace; letter-spacing: .04em;
+    color: var(--intro); background: none; border: 0; padding: .2em .4em; cursor: pointer;
+    animation: inhale 6s ease-in-out infinite;
+  }
+  #intro button:focus-visible { outline: 1px solid var(--hint); outline-offset: 6px; }
+  #introSub {
+    margin: 1.6em 0 0; max-width: 52em; text-align: center;
+    font: 400 14px/1.7 'Special Elite', 'Courier New', monospace; color: var(--intro); opacity: .65;
+  }
+  #introSub span, #introAbout span { display: block; }
+  #introSub span + span, #introAbout span + span { margin-top: .9em; }
+  #introAbout {
+    margin: 2.2em 0 0; max-width: 40em; text-align: center;
+    font: 400 13px/1.75 'Special Elite', 'Courier New', monospace; color: var(--intro); opacity: .5;
+  }
+  #calib {
+    position: absolute; font: 400 18px 'Special Elite', 'Courier New', monospace; color: var(--intro);
+    opacity: 0; transition: opacity 1.2s ease; pointer-events: none;
+  }
+  @keyframes inhale { 0%, 100% { opacity: .4; } 50% { opacity: 1; } }
 
-  .panel {
-    position: fixed; inset: 0;
-    display: flex; align-items: center; justify-content: center;
-    padding: 0 24px;
-    opacity: 0;
-    transition: opacity 1.6s ease;
-    pointer-events: none;
-  }
-  .panel.show { opacity: 1; pointer-events: auto; }
-
-  form {
-    width: min(30rem, 100%);
-    margin-top: -12vh;
-    display: flex; flex-direction: column; gap: 1.6rem;
-    font-size: clamp(1rem, 2.4vw, 1.25rem);
-    line-height: 1.5;
-  }
-  form p, form label { margin: 0; }
-  label { margin-bottom: -0.8rem !important; }
-  input {
-    font: inherit; color: inherit;
-    background: transparent;
-    border: 0; border-bottom: 1px solid var(--ink);
-    border-radius: 0;
-    padding: 0.3rem 0;
-    outline: none;
-    caret-color: var(--ink);
-  }
-  input::selection { background: var(--ink); color: var(--sky); }
-  button {
-    align-self: flex-start;
-    font: inherit; color: inherit;
-    background: none; border: 0; padding: 0;
-    cursor: pointer;
-    text-decoration: underline;
-    text-decoration-thickness: 1px;
-    text-underline-offset: 0.3em;
-  }
-  button:hover, button:focus-visible { text-decoration-thickness: 2px; outline: none; }
-
-  .msg {
-    margin: 0;
-    margin-top: -12vh;
-    font-size: clamp(1rem, 2.4vw, 1.25rem);
-    text-align: center;
+  #debug {
+    position: fixed; left: 8px; top: 8px; z-index: 11; display: none;
+    font: 11px/1.4 monospace; color: #9f9; background: rgba(0, 0, 0, .6); padding: 6px 8px; white-space: pre;
   }
 </style>
 </head>
 <body>
-
-<canvas id="scene"></canvas>
-
-<main id="intro" class="panel">
-  <form id="form" autocomplete="off">
-    <label for="words">what do you want to let go of?</label>
-    <input id="words" maxlength="60" spellcheck="false">
-    <p>breathe out slowly. the bag will listen.</p>
-    <button type="submit">begin</button>
-  </form>
-</main>
-<p id="calibrate" class="panel msg" hidden>stay quiet for a moment.</p>
-<p id="nomic" class="panel msg" hidden>no microphone. hold the spacebar to breathe out.</p>
-<p id="end" class="panel msg" hidden>let go.</p>
+  <canvas id="tree"></canvas>
+  <div id="scan"></div>
+  <img id="hand" alt="" draggable="false">
+  <div id="glow"></div>
+  <input id="bar" type="text" autocomplete="off" spellcheck="false" aria-label="memoria / memory">
+  <canvas id="fx"></canvas>
+  <div id="hint"></div>
+  <div id="tip"></div>
+  <div id="intro">
+    <div id="introText"><button type="button"></button><p id="introSub"></p><p id="introAbout"></p></div>
+    <div id="calib"></div>
+  </div>
+  <div id="debug"></div>
 
 <script>
-// ---------- timing ----------
-const EXPERIENCE_SECONDS = 120;   // length of the experience
-const CALIBRATION_SECONDS = 3.5;  // listening to the room
-const FADE_FROM = 0.72;           // fraction of the experience when the bag starts to fade
+// ===================================================================
+// CONFIG: every position and every color lives here.
+// Hand positions are in pixels of hand-cutout.png (2000 x 1502), the
+// same layout as hand-labeled.png. Tree values are fractions of the
+// screen (x of width, y of height) unless noted.
+// ===================================================================
+const CONFIG = {
+  hand: {
+    image: 'hand-cutout.png',
+    imageSize: [2000, 1502],
+    visibleSpan: [470, 1500],   // left/right edge of the hand in the image, used to fit narrow screens
+    height: 0.96,               // hand height as a fraction of the screen height
+    maxWidth: 0.96,             // the visible hand never gets wider than this fraction of the screen
+    centerX: 0.5,               // where the hand's center sits horizontally
+    brightness: 0.8,            // dims the photo a little so the tree can glow
+    contrast: 1.08,
+  },
 
-// ---------- helpers ----------
-const $ = s => document.querySelector(s);
-const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
-const rand = (a, b) => a + Math.random() * (b - a);
-const smoothstep = (a, b, v) => { const t = clamp((v - a) / (b - a)); return t * t * (3 - 2 * t); };
-// frame-rate independent easing toward a target
-const approach = (cur, target, rate, dt) => cur + (target - cur) * (1 - Math.exp(-rate * dt));
-// slow organic wobble in roughly [-1, 1]
-const wobble = (t, s) => Math.sin(t * 0.71 + s) * 0.5 + Math.sin(t * 1.33 + s * 2.1) * 0.3 + Math.sin(t * 2.17 + s * 3.7) * 0.2;
+  // the glowing bar printed in the photo, where the visitor types
+  bar: { x: 720, y: 1311, w: 520, h: 46 },
 
-function fadeIn(el) { el.hidden = false; requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('show'))); }
-function fadeOut(el) { el.classList.remove('show'); setTimeout(() => { if (!el.classList.contains('show')) el.hidden = true; }, 1700); }
+  // each path runs from the bar up through the finger; the last point is the fingertip
+  fingers: {
+    order: ['A', 'B', 'C', 'D', 'E'],
+    A: { path: [[790, 1334], [700, 1180], [640, 1020], [590, 890], [548, 790], [522, 768]] },  // thumb
+    B: { path: [[870, 1334], [815, 1150], [805, 960], [790, 760], [778, 540], [768, 338]] },   // index
+    C: { path: [[965, 1334], [975, 1150], [965, 950], [955, 740], [925, 500], [890, 300], [870, 212]] }, // middle
+    D: { path: [[1075, 1334], [1100, 1130], [1110, 930], [1118, 700], [1100, 480], [1078, 272]] }, // ring
+    E: { path: [[1170, 1334], [1220, 1120], [1265, 960], [1335, 820], [1395, 670], [1432, 535]] }, // little
+  },
 
-const css = getComputedStyle(document.documentElement);
-const color = name => css.getPropertyValue(name).trim();
-const FONT = "'Special Elite', 'Courier Prime', 'Courier New', monospace";
+  tree: {
+    x: 0.8,                 // trunk position: behind the right side of the hand
+    groundY: 0.8,           // where the rings lie (higher = further back)
+    trunkTopY: 0.48,        // where the branches leave the trunk
+    canopyY: 0.28,          // center of the crown
+    canopyWidth: 0.42,
+    canopyHeight: 0.48,
+    ringStart: 0.08,        // first memory ring radius, as a fraction of the hand's width
+    ringGap: 0.028,         // space per memory ring (fraction of hand width); shrinks as rings add up
+    ringReach: 0.45,        // rings never spread past this fraction of the screen width
+    ringLines: 3,           // fine lines per memory ring
+    ringFlatten: 0.16,      // perspective of the ground
+    ringWobble: 0.012,      // how much the rings ripple
+    flareHeight: 0.14,      // how high the rings climb into the trunk (fraction of screen height)
+    flareFalloff: 0.07,     // fraction of hand width
+    groundLines: 26,        // faint contour lines beyond the memory rings
+    shimmerSpeed: 0.05,     // iridescent colors traveling outward through the rings
+    baseBlobs: 22,          // crown density before any memory
+  },
 
-// ---------- canvas ----------
-const canvas = $('#scene');
-const ctx = canvas.getContext('2d');
-let W = 0, H = 0, horizonY = 0, bagW = 0, bagH = 0;
-const PIVOT = 0.28; // the bag hangs and turns around a point near its handles
+  breath: {
+    calibrationMs: 3000,
+    sensitivity: 1,         // raise above 1 if gentle breaths are not detected
+    ratio: 1.8,             // breath must be this many times louder than the room...
+    stdK: 4,                // ...and this many standard deviations above it...
+    minDelta: 0.006,        // ...and at least this much above it (RMS)
+    fullScale: 2.5,         // how far above the threshold counts as a full breath
+    startMs: 140,           // a breath must last this long to count
+    endMs: 260,
+    attack: 0.35,           // smoothing
+    release: 0.08,
+    adapt: 0.003,           // slow drift of the room baseline
+  },
 
-function resize() {
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
-  W = innerWidth; H = innerHeight;
-  canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  horizonY = Math.round(H * 0.8);
-  bagH = Math.min(H * 0.4, W * 0.6);
-  bagW = bagH * (bagImg.naturalWidth ? bagImg.naturalWidth / bagImg.naturalHeight : 0.75);
+  light: {
+    maxParticles: 900,
+    dissolveMs: 700,
+    idleSpeed: 0.2,         // speed up the finger when the breath pauses (path lengths per second)
+    breathSpeed: 1.3,       // extra speed at full breath
+    exitSpeed: 1.2,        // once the light reaches the fingertip, the rest follows at least this fast
+    lag: 0.18,              // length of the stream of light
+    streamWidth: 24,        // in image pixels
+    jitter: 14,             // how much a sharp breath scatters the light
+    flightMs: [800, 1300],  // fingertip to tree
+  },
+
+  colors: {
+    background: '#050508',
+    scanline: 'rgba(0, 0, 0, 0.32)',
+    ink: '#3b2c20',
+    inkSoft: 'rgba(70, 52, 38, 0.5)',
+    barGlow: '#ffecc9',
+    heldText: '#fff4e2',
+    heldGlow: 'rgba(255, 214, 160, 0.9)',
+    hint: 'rgba(255, 244, 228, 0.78)',
+    intro: '#e9e2f5',
+    tip: '#efe8ff',
+    light: '#ffe9c8',
+    lightCool: '#c9c0ff',
+    iridescent: ['#ff4fd8', '#ffa64f', '#fff36b', '#6bffb8', '#4ff0ff', '#6f8bff', '#b9a4ff'],
+    ground: '#c8c4e0',
+    trunk: '#b8b2ff',
+    branch: '#ddd6ff',
+    node: '#fff6e0',
+    canopy: ['#5d6bd8', '#7f7cf0', '#9b8cff', '#b6a8ff', '#8fb4ff', '#d9d2ff', '#6b5fc8'],
+    glyph: ['#ff4fd8', '#4ff0ff', '#fff36b', '#b9a4ff', '#ffffff'],
+  },
+
+  text: {
+    intro: 'aliento',
+    introSub: 'en español, aliento es el aire que respiramos y también el ánimo que nos dan nuestros mayores\n' +
+              'in Spanish, aliento means both breath and the encouragement our elders give us',
+    introAbout: 'Aquí guardamos los recuerdos de nuestros mayores, estén vivos o no: un consejo o unas palabras que te dieron y que significan mucho para ti. ' +
+                'Escríbelas y sopla. Viajarán a un árbol digital que nos recuerda que sus palabras se quedan con nosotros para siempre. Nunca se van.\n' +
+                'This is a place for the memories of the elders in our lives, living or not: a piece of advice, or words they gave you that mean a lot. ' +
+                'Write them and blow. They travel to a digital tree that reminds us their words stay with us forever. They never leave.',
+    calibrating: 'silencio… / quiet…',
+    write: 'un recuerdo… / a memory…',
+    from: '¿de quién? / from whom?',
+    // instructions at the bottom of the screen ("\n" starts a new line)
+    enterThenBlow: 'presiona ↵ y sopla hacia la pantalla para que tu recuerdo llegue al árbol\n' +
+                   'press ↵, then blow on your screen to send your memory to the tree',
+    blow: 'sopla hacia la pantalla para que tu recuerdo llegue al árbol\n' +
+          'blow on your screen to send your memory to the tree',
+    enterThenHold: 'presiona ↵ y mantén la barra espaciadora para que tu recuerdo llegue al árbol\n' +
+                   'press ↵, then hold the space bar to send your memory to the tree',
+    hold: 'mantén la barra espaciadora para que tu recuerdo llegue al árbol\n' +
+          'hold the space bar to send your memory to the tree',
+  },
+
+  storageKey: 'aliento.memories',
+};
+
+// ===================================================================
+const C = CONFIG;
+const $ = id => document.getElementById(id);
+const treeCv = $('tree'), fxCv = $('fx'), handImg = $('hand'), bar = $('bar'), glow = $('glow');
+const hint = $('hint'), tip = $('tip'), intro = $('intro'), introBtn = intro.querySelector('button'), calib = $('calib');
+const introText = $('introText'), introSub = $('introSub'), introAbout = $('introAbout');
+const tctx = treeCv.getContext('2d'), fctx = fxCv.getContext('2d');
+const DEBUG = new URLSearchParams(location.search).has('debug');
+
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const easeInOut = t => t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+const easeOut = t => 1 - Math.pow(1 - t, 3);
+const wait = ms => new Promise(r => setTimeout(r, ms));
+
+function hexRgb(h) {
+  h = h.replace('#', '');
+  if (h.length === 3) h = h.split('').map(c => c + c).join('');
+  const n = parseInt(h, 16);
+  return [n >> 16 & 255, n >> 8 & 255, n & 255];
+}
+const rgba = (hex, a) => { const [r, g, b] = hexRgb(hex); return `rgba(${r},${g},${b},${a})`; };
+const PAL = C.colors.iridescent.map(hexRgb);
+function palAt(f, a) {
+  f = ((f % 1) + 1) % 1 * PAL.length;
+  const i = Math.floor(f), k = f - i, p = PAL[i], q = PAL[(i + 1) % PAL.length];
+  return `rgba(${p[0] + (q[0] - p[0]) * k | 0},${p[1] + (q[1] - p[1]) * k | 0},${p[2] + (q[2] - p[2]) * k | 0},${a})`;
+}
+function rng(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function hash(s) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
 }
 
-// ---------- the bag image, tinted to --bag ----------
-// bag.png holds the plastic's density as alpha and its creases as gray;
-// multiplying by the bag color keeps the creases deeper and the thin parts see-through.
-const bagImg = new Image();
-let bagTint = null;
-bagImg.onload = () => {
-  const c = document.createElement('canvas');
-  c.width = bagImg.naturalWidth; c.height = bagImg.naturalHeight;
-  const g = c.getContext('2d');
-  g.drawImage(bagImg, 0, 0);
-  g.globalCompositeOperation = 'multiply';
-  g.fillStyle = color('--bag');
-  g.fillRect(0, 0, c.width, c.height);
-  g.globalCompositeOperation = 'destination-in';
-  g.drawImage(bagImg, 0, 0);
-  bagTint = c;
-  resize();
-};
-bagImg.src = 'bag.png';
+// ---------- memories ----------
+let memories = [];
+let visitorCount = 0;
+const ringBorn = {}, branchBorn = {};
 
-// ---------- state ----------
-let phase = 'intro';  // intro → calibrating → (waiting) → live → ending → done
-let elapsed = 0;      // seconds into the experience
-let endTime = 0;
-let queue = [];       // letters still held by the bag
-let total = 0;
-let releaseAcc = 0;
-const letters = [];
+const validMemory = m => m && typeof m.text === 'string' && m.text.trim();
 
-const bag = {
-  x: 0, y: 0, vx: 0, vy: 0,
-  rot: 0, av: 0,
-  chaos: 0, lightness: 0, opacity: 0, sway: 1,
-  sx: 1, sy: 1,
-};
-let wind = { x: 1, y: -0.2 };
+function loadVisitor() {
+  try {
+    const v = JSON.parse(localStorage.getItem(C.storageKey) || '[]');
+    return Array.isArray(v) ? v.filter(validMemory) : [];
+  } catch (e) { return []; }
+}
+function saveVisitor(list) {
+  try { localStorage.setItem(C.storageKey, JSON.stringify(list)); } catch (e) { /* storage unavailable */ }
+}
+async function loadSeeds() {
+  try {
+    const r = await fetch('memories.json', { cache: 'no-cache' });
+    const v = await r.json();
+    return Array.isArray(v) ? v.filter(validMemory) : [];
+  } catch (e) { return []; }
+}
+
+function guessLang(text) {
+  const s = ' ' + text.toLowerCase().replace(/[.,;:!?"]/g, ' ') + ' ';
+  if (/[ñáéíóúü¿¡]/.test(s)) return 'es';
+  const count = re => (s.match(re) || []).length;
+  const es = count(/\s(el|la|los|las|que|de|y|un|una|es|no|por|con|para|mi|tu|siempre|nunca|cuando|pero|como|lo|se)(?=\s)/g);
+  const en = count(/\s(the|and|you|to|of|is|it|that|my|your|always|never|be|when|but|like|was|with|for)(?=\s)/g);
+  return es > en ? 'es' : 'en';
+}
+
+// ---------- layout ----------
+let W = 0, H = 0, DPR = 1;
+const L = {};
+
+function toScreen(x, y) { return [L.hx + x * L.s, L.hy + y * L.s]; }
+
+function makePath(pts) {
+  const out = [];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[Math.max(i - 1, 0)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(i + 2, pts.length - 1)];
+    for (let k = 0; k < 20; k++) {
+      const t = k / 20, t2 = t * t, t3 = t2 * t;
+      const cr = j => 0.5 * (2 * p1[j] + (-p0[j] + p2[j]) * t + (2 * p0[j] - 5 * p1[j] + 4 * p2[j] - p3[j]) * t2 + (-p0[j] + 3 * p1[j] - 3 * p2[j] + p3[j]) * t3);
+      out.push([cr(0), cr(1)]);
+    }
+  }
+  out.push(pts[pts.length - 1]);
+  const len = [0];
+  for (let i = 1; i < out.length; i++) len.push(len[i - 1] + Math.hypot(out[i][0] - out[i - 1][0], out[i][1] - out[i - 1][1]));
+  const total = len[len.length - 1];
+  return {
+    at(u) {
+      const d = clamp(u) * total;
+      let i = 1;
+      while (i < len.length - 1 && len[i] < d) i++;
+      const a = out[i - 1], b = out[i], seg = (len[i] - len[i - 1]) || 1, k = (d - len[i - 1]) / seg;
+      const tx = (b[0] - a[0]) / seg, ty = (b[1] - a[1]) / seg;
+      return { x: lerp(a[0], b[0], k), y: lerp(a[1], b[1], k), tx, ty };
+    },
+  };
+}
+
+function sizeCanvas(cv, ctx) {
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  cv.style.width = W + 'px'; cv.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+function place(el, r) {
+  Object.assign(el.style, { left: r.x + 'px', top: r.y + 'px', width: r.w + 'px', height: r.h + 'px' });
+}
+
+function layout() {
+  W = innerWidth; H = innerHeight; DPR = Math.min(devicePixelRatio || 1, 2);
+  sizeCanvas(treeCv, tctx); sizeCanvas(fxCv, fctx);
+
+  const [IW, IH] = C.hand.imageSize, [sl, sr] = C.hand.visibleSpan;
+  const s = Math.min(H * C.hand.height / IH, W * C.hand.maxWidth / (sr - sl));
+  L.s = s; L.hw = IW * s; L.hh = IH * s;
+  L.hx = W * C.hand.centerX - (sl + sr) / 2 * s;
+  L.hy = H - L.hh;
+  place(handImg, { x: L.hx, y: L.hy, w: L.hw, h: L.hh });
+  L.handSpan = (sr - sl) * s;
+
+  const [bx, by] = toScreen(C.bar.x, C.bar.y);
+  L.bar = { x: bx, y: by, w: C.bar.w * s, h: C.bar.h * s };
+  place(glow, L.bar); place(bar, L.bar);
+  L.barFont = Math.max(11, L.bar.h * 0.42);
+  bar.style.fontSize = L.barFont + 'px';
+  bar.style.padding = `0 ${L.bar.h * 0.6}px`;
+
+  L.paths = {};
+  for (const k of C.fingers.order) L.paths[k] = makePath(C.fingers[k].path.map(p => toScreen(p[0], p[1])));
+
+  const t = C.tree;
+  L.cx = W * t.x; L.ground = H * t.groundY; L.trunkTop = H * t.trunkTopY;
+  L.canopy = { x: L.cx, y: H * t.canopyY, rx: W * t.canopyWidth / 2, ry: H * t.canopyHeight / 2 };
+  L.r0 = L.handSpan * t.ringStart;
+  L.flareH = H * t.flareHeight; L.flareFall = L.handSpan * t.flareFalloff;
+
+  heldCache = null;
+  layoutTree();
+  buildGlyphs();
+}
+
+function layoutTree() {
+  const t = C.tree, n = Math.max(memories.length + 1, 1);
+  L.gap = Math.min(L.handSpan * t.ringGap, Math.max(4, (W * t.ringReach - L.r0) / n));
+  L.branches = memories.map((m, i) => branchGeom(m, i));
+  buildCanopy();
+}
+
+function ringR(i, j) {
+  const lines = C.tree.ringLines;
+  return L.r0 + (i + 0.15 + 0.7 * (lines > 1 ? j / (lines - 1) : 0.5)) * L.gap;
+}
+function ringY(R) {
+  return L.ground - L.flareH * Math.exp(-Math.max(0, R - L.r0 * 0.2) / L.flareFall);
+}
+
+function branchGeom(m, i) {
+  const r = rng(hash(m.text) + i * 7919), c = L.canopy;
+  const ang = -Math.PI / 2 + (r() - 0.5) * Math.PI * 1.15;
+  const d = 0.3 + 0.62 * r();
+  const x = c.x + Math.cos(ang) * d * c.rx;
+  const y = c.y + Math.sin(ang) * d * c.ry * 0.85 + c.ry * 0.12;
+  const sx = L.cx + (r() - 0.5) * L.handSpan * 0.04, sy = L.trunkTop;
+  const qx = sx + (x - sx) * 0.15, qy = sy + (y - sy) * 0.8;
+  const pts = [];
+  for (let k = 0; k <= 18; k++) {
+    const u = k / 18, v = 1 - u;
+    pts.push([v * v * sx + 2 * v * u * qx + u * u * x, v * v * sy + 2 * v * u * qy + u * u * y]);
+  }
+  return { pts, x, y, r: Math.min(c.rx, c.ry * 1.6) * (0.13 + 0.06 * r()) };
+}
+
+// ---------- the crown (pre-rendered, rebuilt when a memory joins) ----------
+const canopyCv = document.createElement('canvas'), canopyCtx = canopyCv.getContext('2d');
+const glyphCv = document.createElement('canvas'), glyphCtx = glyphCv.getContext('2d');
+
+function buildCanopy() {
+  sizeCanvas(canopyCv, canopyCtx);
+  const g = canopyCtx, c = L.canopy;
+  g.clearRect(0, 0, W, H);
+
+  const br = rng(12345), blobs = [];
+  const nb = C.tree.baseBlobs;
+  for (let i = 0; i < nb; i++) {
+    // fill the crown evenly (sunflower spiral), with a little randomness
+    const a = i * 2.39996 + (br() - 0.5) * 0.6, d = Math.sqrt((i + 0.5) / nb) * 0.85;
+    blobs.push({ x: c.x + Math.cos(a) * d * c.rx, y: c.y + Math.sin(a) * d * c.ry, r: Math.min(c.rx, c.ry * 1.6) * (0.14 + 0.08 * br()), w: 0.6 });
+  }
+  for (const b of L.branches) blobs.push({ x: b.x, y: b.y, r: b.r, w: 0.8 });
+
+  // soft haze under the dots
+  for (const b of blobs) {
+    const gr = g.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.r * 1.6);
+    gr.addColorStop(0, rgba(C.colors.canopy[1], 0.07 * b.w));
+    gr.addColorStop(1, rgba(C.colors.canopy[1], 0));
+    g.fillStyle = gr;
+    g.fillRect(b.x - b.r * 1.6, b.y - b.r * 1.6, b.r * 3.2, b.r * 3.2);
+  }
+
+  const cell = 8, gx = Math.ceil(W / cell) + 1, gy = Math.ceil(H / cell) + 1, field = new Float32Array(gx * gy);
+  for (const b of blobs) {
+    const x0 = Math.max(0, Math.floor((b.x - b.r * 2.5) / cell)), x1 = Math.min(gx - 1, Math.ceil((b.x + b.r * 2.5) / cell));
+    const y0 = Math.max(0, Math.floor((b.y - b.r * 2.5) / cell)), y1 = Math.min(gy - 1, Math.ceil((b.y + b.r * 2.5) / cell));
+    for (let yy = y0; yy <= y1; yy++) for (let xx = x0; xx <= x1; xx++) {
+      const dx = xx * cell - b.x, dy = (yy * cell - b.y) * 1.3;
+      field[yy * gx + xx] += b.w * Math.exp(-(dx * dx + dy * dy) / (b.r * b.r));
+    }
+  }
+
+  const rand = rng(777), cols = C.colors.canopy;
+  const drips = [];
+  for (let x = 0; x < W; x += 3) {
+    const col = 0.4 + 0.6 * rand();
+    let lowest = -1;
+    for (let y = 0; y < L.ground; y += 2) {
+      const f = field[(y / cell | 0) * gx + (x / cell | 0)] * col * clamp((1.2 - Math.hypot((x - c.x) / c.rx, (y - c.y) / c.ry)) * 2.5);
+      if (f < 0.1) continue;
+      lowest = y;
+      const p = clamp((f - 0.1) / 0.8);
+      if (rand() < p * p * (3 - 2 * p) * 0.6) {
+        g.fillStyle = cols[(rand() * cols.length) | 0];
+        g.globalAlpha = Math.min(1, 0.15 + p * 0.75) * (0.45 + 0.55 * rand());
+        g.fillRect(x, y, 1.4, 1.6);
+      }
+    }
+    if (lowest > 0 && col > 0.88) drips.push([x, lowest]);
+  }
+  // scanlines falling from the crown to the ground
+  g.lineWidth = 1;
+  for (const [x, y] of drips) {
+    const gr = g.createLinearGradient(0, y, 0, L.ground);
+    gr.addColorStop(0, rgba(cols[(x * 7) % cols.length], 0.22));
+    gr.addColorStop(1, rgba(cols[(x * 7) % cols.length], 0));
+    g.globalAlpha = 1; g.strokeStyle = gr;
+    g.beginPath(); g.moveTo(x + 0.5, y); g.lineTo(x + 0.5, L.ground); g.stroke();
+  }
+  g.globalAlpha = 1;
+}
+
+function buildGlyphs() {
+  sizeCanvas(glyphCv, glyphCtx);
+  const g = glyphCtx, rand = rng(4242), cols = C.colors.glyph;
+  g.clearRect(0, 0, W, H);
+  const count = Math.round(W * H / 900);
+  for (let i = 0; i < count; i++) {
+    const x = Math.round(rand() * W / 7) * 7, y = Math.round(rand() * H / 9) * 9;
+    const edge = Math.abs(x - W / 2) / (W / 2);
+    if (rand() > 0.15 + 0.85 * edge * edge) continue;
+    g.fillStyle = cols[(rand() * cols.length) | 0];
+    g.globalAlpha = 0.05 + 0.2 * rand();
+    g.fillRect(x, y, 2 + ((rand() * 4) | 0), 1.5);
+  }
+  g.globalAlpha = 1;
+}
+
+// ---------- hand mask (so hovering the hand reveals nothing) ----------
+let handMask = null;
+function buildHandMask() {
+  try {
+    const cv = document.createElement('canvas'), mw = 250, mh = Math.round(250 * C.hand.imageSize[1] / C.hand.imageSize[0]);
+    cv.width = mw; cv.height = mh;
+    const g = cv.getContext('2d');
+    g.drawImage(handImg, 0, 0, mw, mh);
+    handMask = { w: mw, h: mh, data: g.getImageData(0, 0, mw, mh).data };
+  } catch (e) { handMask = null; } // e.g. opened as a file: no mask, still works
+}
+function handOpaque(x, y) {
+  if (!handMask) return false;
+  const ix = Math.floor((x - L.hx) / L.hw * handMask.w), iy = Math.floor((y - L.hy) / L.hh * handMask.h);
+  if (ix < 0 || iy < 0 || ix >= handMask.w || iy >= handMask.h) return false;
+  return handMask.data[(iy * handMask.w + ix) * 4 + 3] > 100;
+}
 
 // ---------- breath ----------
+const B = C.breath;
 const breath = {
-  mode: 'none',        // 'mic' or 'key'
-  analyser: null, buf: null,
-  baseline: 0, thrOn: 0, thrOff: 0, ref: 0.05,
-  level: 0, above: 0, below: 0,
-  exhaling: false, start: 0, dur: 0,
-  force: 0,            // how hard (0..1), drives chaos
-  intensity: 0,        // smoothed strength of the breath (0..1), drives drift
-  spaceHeld: false,
-  samples: [], calStart: 0,
+  mode: 'none', calibrated: false, analyser: null, buf: null,
+  level: 0, base: 0, std: 0, thresh: 1, active: false, strength: 0, glow: 0, rough: 0,
+  above: 0, below: 0, keyHeld: false,
 };
 
-function readRMS() {
-  const b = breath.buf;
-  breath.analyser.getFloatTimeDomainData(b);
-  let s = 0;
-  for (let i = 0; i < b.length; i++) s += b[i] * b[i];
-  return Math.sqrt(s / b.length);
-}
-
-function finishCalibration() {
-  const s = breath.samples.sort((a, b) => a - b);
-  const median = s[Math.floor(s.length * 0.5)] || 0;
-  const p90 = s[Math.floor(s.length * 0.9)] || 0;
-  const noise = Math.max(p90 - median, median * 0.25);
-  breath.baseline = median;
-  breath.thrOn = median + Math.max(noise * 3, median * 0.6, 0.004);
-  breath.thrOff = median + (breath.thrOn - median) * 0.5;
-  breath.ref = Math.max(0.02, (breath.thrOn - median) * 6);
-  breath.level = median;
-}
-
-function startExhale(now) {
-  breath.exhaling = true;
-  breath.start = now;
-  releaseAcc = 0.7; // the first letter comes loose almost at once
-  // blow back toward the open side of the screen, slightly upward
-  const off = (bag.x - W / 2) / (W / 2);
-  const side = Math.abs(off) > 0.3 ? -Math.sign(off) : (Math.random() < 0.5 ? -1 : 1);
-  const a = -0.1 - Math.random() * 0.2;
-  wind = { x: side * Math.cos(a), y: Math.sin(a) };
-}
-
-function updateBreath(dt, now) {
-  const listening = phase === 'live';
-  let rawForce = 0;
-
-  if (breath.mode === 'mic') {
-    const r = readRMS();
-    breath.level = approach(breath.level, r, r > breath.level ? 14 : 5, dt);
-    const excess = Math.max(0, breath.level - breath.baseline);
-    // adapt the "hard" reference to the strongest breaths seen, slowly relaxing
-    const refMin = Math.max(0.02, (breath.thrOn - breath.baseline) * 6);
-    breath.ref = Math.max(refMin, breath.ref * Math.exp(-0.02 * dt));
-    if (excess > breath.ref) breath.ref = approach(breath.ref, excess, 1.5, dt);
-    rawForce = clamp(excess / breath.ref);
-
-    if (!breath.exhaling) {
-      breath.above = breath.level > breath.thrOn ? breath.above + dt : 0;
-      if (listening && breath.above > 0.08) startExhale(now);
-    } else {
-      breath.below = breath.level < breath.thrOff ? breath.below + dt : 0;
-      if (breath.below > 0.18 || !listening) { breath.exhaling = false; breath.below = 0; }
-    }
-  } else if (breath.mode === 'key') {
-    rawForce = 0.3; // the spacebar is always a gentle breath
-    if (breath.spaceHeld && listening && !breath.exhaling) startExhale(now);
-    if ((!breath.spaceHeld || !listening) && breath.exhaling) breath.exhaling = false;
-  }
-
-  if (breath.exhaling) breath.dur = now - breath.start;
-  const on = breath.exhaling;
-  breath.force = approach(breath.force, on ? rawForce : 0, 6, dt);
-  breath.intensity = approach(breath.intensity, on ? 0.35 + 0.65 * rawForce : 0, on ? 2.2 : 1.2, dt);
-}
-
-// ---------- letters ----------
-function releaseLetter(gentle) {
-  if (!queue.length) return;
-  const ch = queue.shift();
-  const carry = clamp(breath.dur / 6);
-  const c = bag.chaos;
-  // a point somewhere on the bag's body, following its rotation
-  const ox = rand(-0.22, 0.22) * bagW * bag.sx;
-  const oy = rand(0.05, 0.55) * bagH * bag.sy;
-  const cos = Math.cos(bag.rot), sin = Math.sin(bag.rot);
-  let angle, speed, life;
-  if (gentle) {
-    angle = -Math.PI / 2 + rand(-0.9, 0.9);
-    speed = rand(18, 40);
-    life = rand(5, 7);
-  } else {
-    angle = Math.atan2(wind.y, wind.x) + rand(-0.5, 0.5) * (0.35 + c * 2.4);
-    speed = (50 + breath.intensity * 60 + carry * 120) * rand(0.7, 1.3);
-    life = (3.5 + carry * 6) * (1 - c * 0.3) * rand(0.85, 1.15);
-  }
-  letters.push({
-    ch,
-    x: bag.x + ox * cos - oy * sin,
-    y: bag.y + ox * sin + oy * cos,
-    vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
-    rot: rand(-0.25, 0.25), spin: rand(-0.5, 0.5) * (0.6 + c * 5),
-    size: bagH * rand(0.065, 0.105),
-    alpha: rand(0.65, 1),
-    age: 0, life,
-    seed: rand(0, 100),
-  });
-}
-
-function updateLetters(dt, t) {
-  for (let i = letters.length - 1; i >= 0; i--) {
-    const l = letters[i];
-    l.age += dt;
-    if (l.age > l.life) { letters.splice(i, 1); continue; }
-    const drag = Math.exp(-0.25 * dt);
-    l.vx = l.vx * drag + (wobble(t * 1.3, l.seed) * 14 + wind.x * breath.intensity * 40) * dt;
-    l.vy = l.vy * drag + (wobble(t * 1.1, l.seed + 3) * 14 - 6) * dt;
-    l.x += l.vx * dt; l.y += l.vy * dt;
-    l.spin *= Math.exp(-0.15 * dt);
-    l.rot += l.spin * dt;
-  }
-}
-
-function drawLetters() {
-  ctx.fillStyle = color('--ink');
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  for (const l of letters) {
-    const a = l.alpha * smoothstep(0, 0.25, l.age) * (1 - smoothstep(l.life * 0.5, l.life, l.age));
-    if (a <= 0.003) continue;
-    ctx.save();
-    ctx.globalAlpha = a;
-    ctx.translate(l.x, l.y);
-    ctx.rotate(l.rot);
-    ctx.font = `${l.size.toFixed(1)}px ${FONT}`;
-    ctx.fillText(l.ch, 0, 0);
-    ctx.restore();
-  }
-}
-
-// ---------- the bag ----------
-function updateBag(dt, t) {
-  const progress = clamp(elapsed / EXPERIENCE_SECONDS);
-  const released = total ? (total - queue.length) / total : progress;
-  bag.lightness = approach(bag.lightness, 0.8 * released + 0.2 * progress, 0.6, dt);
-  const L = bag.lightness;
-  const buoy = 0.45 + 0.55 * L;          // heavy at first, lighter as the words leave
-  const I = breath.intensity;
-  const carry = 0.5 + Math.min(breath.dur, 6) * 0.3; // duration of the exhale = distance
-
-  // force of the exhale = chaos; slow breaths stay calm
-  const chaosTarget = breath.exhaling ? Math.pow(clamp((breath.force - 0.4) / 0.6), 1.4) : 0;
-  bag.chaos = approach(bag.chaos, chaosTarget, chaosTarget > bag.chaos ? 5 : 1, dt);
-
-  if (phase === 'ending' || phase === 'done') {
-    // the breath no longer reaches it: it sinks and rests on the horizon
-    const restY = horizonY - (0.95 - PIVOT) * bagH * bag.sy;
-    bag.vx = approach(bag.vx, 0, 1.5, dt);
-    bag.vy = 0;
-    bag.x = clamp(bag.x + bag.vx * dt, bagW * 0.6, W - bagW * 0.6);
-    bag.y = approach(bag.y, restY, 0.35, dt);
-    bag.sway = approach(bag.sway, 0, 0.45, dt);
-    bag.chaos = approach(bag.chaos, 0, 2, dt);
-  } else {
-    const restY = H * (0.36 + 0.14 * (1 - L));
-    let ax = wind.x * I * 150 * carry * buoy + (W / 2 - bag.x) * 0.06;
-    let ay = (wind.y * I * 150 * carry - I * 90) * buoy + (restY - bag.y) * 0.9;
-    // soft edges keep it in view
-    const m = bagW * 0.6;
-    if (bag.x < m) ax += (m - bag.x) * 3;
-    if (bag.x > W - m) ax -= (bag.x - (W - m)) * 3;
-    if (bag.y < bagH * 0.3) ay += (bagH * 0.3 - bag.y) * 3;
-    bag.vx = (bag.vx + ax * dt) * Math.exp(-0.9 * dt);
-    bag.vy = (bag.vy + ay * dt) * Math.exp(-1.4 * dt);
-    bag.x += bag.vx * dt;
-    bag.y += bag.vy * dt;
-  }
-
-  // rotation: idle sway, a tilt into the motion, and spin when the breath is hard
-  const s = bag.sway;
-  const rotTarget = (phase === 'ending' || phase === 'done') ? 0.04 : wobble(t * 0.6, 3) * 0.07 * s + clamp(bag.vx * 0.0012, -0.3, 0.3);
-  const torque = (rotTarget - bag.rot) * 5 - bag.av * 2.2 + bag.chaos * wobble(t * 4.3, 5) * 14;
-  bag.av += torque * dt;
-  bag.rot += bag.av * dt;
-
-  // crumpled at first, opening up as it gets lighter; flutters when the breath is hard
-  bag.sx = (0.93 + 0.07 * L) * (1 + 0.015 * wobble(t * 0.9, 7) * s + bag.chaos * 0.07 * Math.sin(t * 23));
-  bag.sy = (0.9 + 0.1 * L) * (1 + 0.02 * wobble(t * 0.7, 8) * s + I * 0.03 - bag.chaos * 0.05 * Math.sin(t * 19 + 1));
-
-  // fade in, then slowly toward the sky near the end
-  let target = 1 - 0.45 * smoothstep(FADE_FROM, 1, progress);
-  if (phase === 'ending' || phase === 'done') target = 0.5;
-  bag.opacity = approach(bag.opacity, target, phase === 'live' && elapsed < 4 ? 0.8 : 0.5, dt);
-}
-
-function drawBag(t) {
-  if (!bagTint || bag.opacity < 0.003) return;
-  const s = bag.sway;
-  const jx = wobble(t * 0.5, 1) * 12 * s + bag.chaos * wobble(t * 7, 11) * 10;
-  const jy = wobble(t * 0.4, 2) * 8 * s + bag.chaos * wobble(t * 6, 13) * 8;
-  ctx.save();
-  ctx.globalAlpha = bag.opacity;
-  ctx.translate(bag.x + jx, bag.y + jy);
-  ctx.rotate(bag.rot);
-  ctx.scale(bag.sx, bag.sy);
-  ctx.drawImage(bagTint, -bagW / 2, -PIVOT * bagH, bagW, bagH);
-  ctx.restore();
-}
-
-// ---------- flow ----------
-let audioCtx = null;
-const form = $('#form'), input = $('#words');
-
-form.addEventListener('submit', async e => {
-  e.preventDefault();
-  const words = input.value.trim();
-  if (!words) { input.focus(); return; }
-  queue = [...words].filter(c => c.trim());
-  total = queue.length;
-  input.blur();
-  fadeOut($('#intro'));
-
+async function startMic() {
   try {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('no mic');
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
     });
-    await audioCtx.resume();
-    const analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 2048;
-    audioCtx.createMediaStreamSource(stream).connect(analyser);
-    breath.analyser = analyser;
-    breath.buf = new Float32Array(analyser.fftSize);
-    breath.mode = 'mic';
-    setTimeout(() => {
-      fadeIn($('#calibrate'));
-      breath.samples = [];
-      breath.calStart = performance.now() / 1000 + 0.8;
-      phase = 'calibrating';
-    }, 1200);
-  } catch (err) {
+    const ac = new (window.AudioContext || window.webkitAudioContext)();
+    if (ac.state === 'suspended') await ac.resume();
+    const an = ac.createAnalyser();
+    an.fftSize = 1024; an.smoothingTimeConstant = 0;
+    ac.createMediaStreamSource(stream).connect(an);
+    breath.analyser = an; breath.buf = new Float32Array(an.fftSize); breath.mode = 'mic';
+    return true;
+  } catch (e) {
     breath.mode = 'key';
-    setTimeout(() => { fadeIn($('#nomic')); phase = 'waiting'; }, 1200);
+    return false;
+  }
+}
+
+function rms() {
+  breath.analyser.getFloatTimeDomainData(breath.buf);
+  let s = 0;
+  for (const v of breath.buf) s += v * v;
+  return Math.sqrt(s / breath.buf.length);
+}
+
+function setThreshold() {
+  const b = breath.base;
+  const raw = Math.max(b * B.ratio, b + B.stdK * breath.std, b + B.minDelta);
+  breath.thresh = b + (raw - b) / B.sensitivity;
+}
+
+function calibrate(ms) {
+  return new Promise(resolve => {
+    const samples = [], end = performance.now() + ms;
+    (function tick() {
+      samples.push(rms());
+      if (performance.now() < end) return requestAnimationFrame(tick);
+      const mean = samples.reduce((a, v) => a + v, 0) / samples.length;
+      breath.std = Math.sqrt(samples.reduce((a, v) => a + (v - mean) ** 2, 0) / samples.length);
+      breath.base = breath.level = mean;
+      setThreshold();
+      breath.calibrated = true;
+      resolve();
+    })();
+  });
+}
+
+function updateBreath(dt) {
+  const prev = breath.strength;
+  let target = 0;
+  if (breath.mode === 'mic' && breath.calibrated) {
+    const raw = rms(), k = raw > breath.level ? B.attack : B.release;
+    breath.level += (raw - breath.level) * (1 - Math.pow(1 - k, dt * 60));
+    if (breath.level > breath.thresh) { breath.above += dt * 1000; breath.below = 0; }
+    else { breath.below += dt * 1000; breath.above = 0; }
+    if (!breath.active && breath.above > B.startMs) breath.active = true;
+    if (breath.active && breath.below > B.endMs) breath.active = false;
+    if (!breath.active && breath.level < breath.thresh) {
+      breath.base += (breath.level - breath.base) * B.adapt;
+      setThreshold();
+    }
+    if (breath.active) target = clamp(0.15 + (breath.level - breath.thresh) / (breath.thresh * B.fullScale));
+    breath.glow = clamp((breath.level - breath.base) / ((breath.thresh - breath.base) || 1), 0, 1.5);
+  } else if (breath.mode === 'key') {
+    breath.active = breath.keyHeld;
+    target = breath.keyHeld ? 0.55 : 0;
+    breath.glow = breath.strength;
+  }
+  breath.strength += (target - breath.strength) * (1 - Math.pow(0.9, dt * 60));
+  const change = Math.abs(breath.strength - prev) / Math.max(dt, 1e-3);
+  breath.rough += (change - breath.rough) * 0.1;
+}
+
+// ---------- state ----------
+let state = 'intro';
+let held = '';            // the memory waiting to be released
+let release = null;
+
+function setState(s) {
+  state = s;
+  if (s === 'write') {
+    bar.readOnly = false; bar.value = ''; bar.maxLength = 300;
+    bar.placeholder = C.text.write;
+  } else if (s === 'from') {
+    bar.readOnly = false; bar.value = ''; bar.maxLength = 60;
+    bar.placeholder = C.text.from;
+  } else if (s === 'ready') {
+    bar.readOnly = true; bar.placeholder = '';
+  } else if (s === 'release') {
+    bar.readOnly = true; bar.value = ''; bar.placeholder = '';
+  }
+  updateHint();
+}
+
+function updateHint() {
+  const mic = breath.mode === 'mic';
+  let text = '';
+  if (state === 'write' && bar.value.trim()) text = mic ? C.text.enterThenBlow : C.text.enterThenHold;
+  else if (state === 'ready' || (state === 'from' && (mic || !bar.value))) text = mic ? C.text.blow : C.text.hold;
+  else if (state === 'from') text = C.text.enterThenHold;
+  if (text) hint.textContent = text;
+  hint.style.opacity = text ? 1 : 0;
+}
+
+bar.addEventListener('input', updateHint);
+bar.addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    if (state === 'write' && bar.value.trim()) { held = bar.value.trim(); heldCache = null; heldShown = performance.now(); setState('from'); }
+    else if (state === 'from') setState('ready');
+  } else if (e.key === 'Escape' && (state === 'from' || state === 'ready')) {
+    held = ''; setState('write');
   }
 });
 
+// spacebar breath, only when the microphone is unavailable
+const spaceCounts = () => breath.mode === 'key' && (state === 'ready' || (state === 'from' && !bar.value));
 addEventListener('keydown', e => {
-  if (e.code !== 'Space' || phase === 'intro') return;
-  e.preventDefault();
-  if (breath.mode !== 'key') return;
-  breath.spaceHeld = true;
-  if (phase === 'waiting') { fadeOut($('#nomic')); breath.spaceHeld = false; setTimeout(startExperience, 1600); phase = 'pre'; }
+  if (e.code === 'Space' && spaceCounts()) { e.preventDefault(); breath.keyHeld = true; return; }
+  if ((state === 'write' || state === 'from') && document.activeElement !== bar && e.key.length === 1 && !e.metaKey && !e.ctrlKey) bar.focus();
 });
-addEventListener('keyup', e => { if (e.code === 'Space') breath.spaceHeld = false; });
+addEventListener('keyup', e => { if (e.code === 'Space') breath.keyHeld = false; });
+addEventListener('blur', () => { breath.keyHeld = false; });
 
-function startExperience() {
-  phase = 'live';
-  elapsed = 0;
-  bag.x = W / 2; bag.y = H * 0.5; bag.vx = bag.vy = 0;
-  bag.opacity = 0;
-  document.body.classList.add('quiet');
+// ---------- held text, drawn just above the bar ----------
+let heldCache = null, heldShown = 0;
+
+function heldLayout() {
+  if (heldCache) return heldCache;
+  const maxW = L.bar.w * 1.3;
+  let fs = Math.max(13, L.bar.h * 0.62), lines;
+  for (;;) {
+    fctx.font = `italic 400 ${fs}px "Cormorant Garamond", serif`;
+    lines = [];
+    let line = '';
+    for (const word of held.split(/\s+/)) {
+      const test = line ? line + ' ' + word : word;
+      if (line && fctx.measureText(test).width > maxW) { lines.push(line); line = word; } else line = test;
+    }
+    if (line) lines.push(line);
+    if (lines.length <= 3 || fs <= 10) break;
+    fs *= 0.9;
+  }
+  return heldCache = { fs, lines, lh: fs * 1.15 };
 }
 
-// ---------- loop ----------
-let last = performance.now() / 1000;
-function frame() {
-  const now = performance.now() / 1000;
-  const dt = Math.min(0.05, now - last);
-  last = now;
+function drawHeld(g, alpha, glowOn) {
+  const { fs, lines, lh } = heldLayout();
+  g.save();
+  g.font = `italic 400 ${fs}px "Cormorant Garamond", serif`;
+  g.textAlign = 'center'; g.textBaseline = 'alphabetic';
+  g.globalAlpha = alpha;
+  g.fillStyle = C.colors.heldText;
+  if (glowOn) { g.shadowColor = C.colors.heldGlow; g.shadowBlur = fs * 0.7; }
+  const cx = L.bar.x + L.bar.w / 2, bottom = L.bar.y - L.bar.h * 0.35;
+  lines.forEach((ln, i) => g.fillText(ln, cx, bottom - (lines.length - 1 - i) * lh));
+  g.restore();
+}
 
-  if (phase === 'calibrating' && now >= breath.calStart) {
-    breath.samples.push(readRMS());
-    if (now - breath.calStart > CALIBRATION_SECONDS) {
-      finishCalibration();
-      fadeOut($('#calibrate'));
-      phase = 'pre';
-      setTimeout(startExperience, 1600);
+// ---------- release: text -> light -> finger -> tree ----------
+const sampleCv = document.createElement('canvas'), sampleCtx = sampleCv.getContext('2d', { willReadFrequently: true });
+
+function makeSprite(hex) {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 32;
+  const g = cv.getContext('2d'), gr = g.createRadialGradient(16, 16, 0, 16, 16, 16);
+  gr.addColorStop(0, 'rgba(255,255,255,1)');
+  gr.addColorStop(0.25, rgba(hex, 0.85));
+  gr.addColorStop(1, rgba(hex, 0));
+  g.fillStyle = gr; g.fillRect(0, 0, 32, 32);
+  return cv;
+}
+const SPRITE_WARM = makeSprite(C.colors.light), SPRITE_COOL = makeSprite(C.colors.lightCool);
+
+function beginRelease(now) {
+  const from = state === 'from' || state === 'ready' ? bar.value.trim() : '';
+  const mem = { text: held, from, lang: guessLang(held) };
+  const finger = C.fingers.order[visitorCount % C.fingers.order.length];
+  const path = L.paths[finger];
+  const target = branchGeom(mem, memories.length);
+
+  // draw the words offscreen and turn their pixels into light
+  sampleCv.width = Math.ceil(W); sampleCv.height = Math.ceil(H);
+  const g = sampleCtx;
+  g.clearRect(0, 0, W, H);
+  drawHeld(g, 1, false);
+  if (from) {
+    g.font = `${L.barFont}px "Courier Prime", monospace`;
+    g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#fff';
+    g.fillText(from, L.bar.x + L.bar.w / 2, L.bar.y + L.bar.h / 2);
+  }
+  const top = Math.max(0, Math.floor(L.bar.y - L.bar.h * 6)), bottom = Math.min(H, Math.ceil(L.bar.y + L.bar.h * 1.5));
+  const left = Math.max(0, Math.floor(L.bar.x - L.bar.w * 0.4)), right = Math.min(W, Math.ceil(L.bar.x + L.bar.w * 1.4));
+  const img = g.getImageData(left, top, right - left, bottom - top), iw = right - left, ih = bottom - top;
+  let lit = 0;
+  for (let i = 3; i < img.data.length; i += 4) if (img.data[i] > 110) lit++;
+  const step = Math.max(1, Math.ceil(Math.sqrt(lit / C.light.maxParticles)));
+  const r = Math.random, start = path.at(0), particles = [];
+  for (let y = 0; y < ih; y += step) for (let x = 0; x < iw; x += step) {
+    if (img.data[(y * iw + x) * 4 + 3] <= 110) continue;
+    const ox = left + x, oy = top + y;
+    particles.push({
+      x0: ox, y0: oy, x: ox, y: oy,
+      gx: start.x + (r() - 0.5) * L.bar.h * 0.8, gy: start.y + (r() - 0.5) * L.bar.h * 0.4,
+      delay: r() * C.light.dissolveMs * 0.45,
+      lag: r() * C.light.lag, off: r() - 0.5, ph: r() * 100,
+      tx: target.x + (r() - 0.5) * target.r, ty: target.y + (r() - 0.5) * target.r * 0.7,
+      dur: lerp(C.light.flightMs[0], C.light.flightMs[1], r()),
+      size: 0.7 + r() * 0.7, fs: 0, done: false,
+    });
+  }
+  release = { start: now, p: 0, path, particles, mem, committed: false };
+  setState('release');
+  bar.blur();
+}
+
+function commit(now) {
+  const i = memories.length;
+  memories.push(release.mem);
+  const visitor = loadVisitor();
+  visitor.push(release.mem);
+  saveVisitor(visitor);
+  visitorCount++;
+  ringBorn[i] = now; branchBorn[i] = now;
+  layoutTree();
+}
+
+function stepRelease(now, dt, t) {
+  const R = release, Lt = C.light, elapsed = now - R.start;
+  const traveling = elapsed > Lt.dissolveMs;
+  if (traveling) {
+    let speed = Lt.idleSpeed + breath.strength * Lt.breathSpeed;
+    if (R.p >= 1) speed = Math.max(speed, Lt.exitSpeed);
+    R.p += speed * dt;
+  }
+  const jit = Lt.jitter * L.s * clamp(breath.rough * 0.6, 0, 2.5);
+  const width = Lt.streamWidth * L.s;
+  let done = 0, landed = 0;
+
+  for (const q of R.particles) {
+    if (q.done) { done++; landed++; continue; }
+    if (!traveling || R.p - q.lag < 0) {
+      const k = easeInOut(clamp((elapsed - q.delay) / (Lt.dissolveMs * 0.55)));
+      q.x = lerp(q.x0, q.gx, k) + Math.sin(t * 3 + q.ph) * 1.5;
+      q.y = lerp(q.y0, q.gy, k) - Math.sin(k * Math.PI) * L.bar.h * 0.4;
+      q.phase = 0;
+      continue;
+    }
+    const u = R.p - q.lag;
+    if (u <= 1) {
+      const pt = R.path.at(u), nx = -pt.ty, ny = pt.tx;
+      const spread = q.off * width * (1 - 0.65 * u) + Math.sin(t * 9 + q.ph) * jit * q.off * 2;
+      q.x = pt.x + nx * spread; q.y = pt.y + ny * spread;
+      q.phase = 1;
+      continue;
+    }
+    if (!q.fs) {
+      const end = R.path.at(1);
+      q.fs = now; q.sx = q.x; q.sy = q.y;
+      q.c1x = q.x + end.tx * L.hh * 0.18 + (Math.random() - 0.5) * L.hw * 0.08;
+      q.c1y = q.y + end.ty * L.hh * 0.18 - L.hh * 0.05;
+      q.c2x = lerp(q.c1x, q.tx, 0.6); q.c2y = Math.min(q.c1y, q.ty) - H * 0.06;
+    }
+    const f = clamp((now - q.fs) / q.dur), e = easeInOut(f), v = 1 - e;
+    q.x = v * v * v * q.sx + 3 * v * v * e * q.c1x + 3 * v * e * e * q.c2x + e * e * e * q.tx;
+    q.y = v * v * v * q.sy + 3 * v * v * e * q.c1y + 3 * v * e * e * q.c2y + e * e * e * q.ty;
+    q.phase = 2; q.f = f;
+    if (f > 0.85) landed++;
+    if (f >= 1) q.done = true;
+  }
+
+  if (!R.committed && landed > R.particles.length * 0.4) { R.committed = true; commit(now); }
+  if (done === R.particles.length) {
+    if (!R.committed) commit(now);
+    release = null; held = ''; heldCache = null;
+    setState('write');
+    bar.focus();
+  }
+}
+
+function drawRelease(g, now, t) {
+  const R = release, elapsed = now - R.start;
+  g.save();
+  g.globalCompositeOperation = 'lighter';
+  const base = Math.max(3, L.bar.h * 0.2);
+  // the held words fade as they dissolve
+  const fade = 1 - clamp(elapsed / (C.light.dissolveMs * 0.5));
+  if (fade > 0) drawHeld(g, fade * 0.8, true);
+  for (const q of R.particles) {
+    if (q.done) continue;
+    let a = 0.85, sz = base * q.size, cool = 0;
+    if (q.phase === 0) a = 0.35 + 0.5 * clamp((elapsed - q.delay) / 300);
+    if (q.phase === 2) { a = 0.85 * (1 - clamp((q.f - 0.7) / 0.3)); sz *= lerp(1, 0.45, q.f); cool = q.f; }
+    g.globalAlpha = a * (1 - cool);
+    g.drawImage(SPRITE_WARM, q.x - sz / 2, q.y - sz / 2, sz, sz);
+    if (cool > 0) { g.globalAlpha = a * cool; g.drawImage(SPRITE_COOL, q.x - sz / 2, q.y - sz / 2, sz, sz); }
+  }
+  // a soft glow leading the stream up the finger
+  if (elapsed > C.light.dissolveMs && R.p < 1.05) {
+    const h = R.path.at(Math.min(R.p, 1)), sz = L.bar.h * (2.2 + breath.strength * 1.5);
+    g.globalAlpha = 0.35 + 0.35 * breath.strength + 0.08 * Math.sin(t * 5);
+    g.drawImage(SPRITE_WARM, h.x - sz / 2, h.y - sz / 2, sz, sz);
+  }
+  g.restore();
+}
+
+// ---------- drawing ----------
+let hovered = null;
+
+function drawEllipse(g, R, wobble, t) {
+  const cy = ringY(R), fl = C.tree.ringFlatten, N = 84;
+  g.beginPath();
+  for (let k = 0; k <= N; k++) {
+    const a = k / N * Math.PI * 2;
+    const rr = R * (1 + wobble * (0.6 * Math.sin(a * 3 + t * 0.7 + R * 0.013) + 0.4 * Math.sin(a * 5 - t * 0.5 + R * 0.007)));
+    const x = L.cx + Math.cos(a) * rr, y = cy + Math.sin(a) * rr * fl;
+    k ? g.lineTo(x, y) : g.moveTo(x, y);
+  }
+  g.stroke();
+}
+
+function drawTree(t, now) {
+  const g = tctx, tr = C.tree, n = memories.length, lines = tr.ringLines;
+  g.globalCompositeOperation = 'source-over';
+  g.globalAlpha = 1;
+  g.fillStyle = C.colors.background;
+  g.fillRect(0, 0, W, H);
+  g.globalAlpha = 0.5 + 0.1 * Math.sin(t * 0.4);
+  g.drawImage(glyphCv, 0, 0, W, H);
+  g.globalAlpha = 0.9 + 0.1 * Math.sin(t * 0.6);
+  g.drawImage(canopyCv, 0, 0, W, H);
+  g.globalAlpha = 1;
+  g.globalCompositeOperation = 'lighter';
+
+  // trunk: a bundle of fine vertical lines
+  const trunkLines = 6 + Math.min(n, 40), topY = L.trunkTop, botY = L.ground - L.flareH * 0.95;
+  g.lineWidth = 0.7;
+  for (let k = 0; k < trunkLines; k++) {
+    const f = trunkLines > 1 ? k / (trunkLines - 1) - 0.5 : 0;
+    const xb = L.cx + f * L.r0 * 0.5, xt = L.cx + f * L.r0 * 0.25 + Math.sin(t * 0.3 + k) * 1.5;
+    g.strokeStyle = rgba(C.colors.trunk, 0.18 + 0.1 * Math.sin(t + k));
+    g.beginPath(); g.moveTo(xb, botY); g.lineTo(xt, topY); g.stroke();
+  }
+
+  // branches and their nodes
+  L.branches.forEach((b, i) => {
+    const grow = branchBorn[i] ? easeOut(clamp((now - branchBorn[i]) / 2200)) : 1;
+    const hot = hovered === i;
+    const last = Math.max(1, Math.round(grow * (b.pts.length - 1)));
+    g.strokeStyle = rgba(C.colors.branch, hot ? 0.95 : 0.26);
+    g.lineWidth = hot ? 1.4 : 0.8;
+    g.beginPath(); g.moveTo(b.pts[0][0], b.pts[0][1]);
+    for (let k = 1; k <= last; k++) g.lineTo(b.pts[k][0], b.pts[k][1]);
+    g.stroke();
+    if (grow >= 1) {
+      g.fillStyle = rgba(C.colors.node, hot ? 1 : 0.55 + 0.25 * Math.sin(t * 1.3 + i));
+      g.beginPath(); g.arc(b.x, b.y, hot ? 3 : 1.8, 0, Math.PI * 2); g.fill();
+    }
+  });
+
+  // inner rings climbing into the trunk
+  g.lineWidth = 0.8;
+  for (let k = 0; k < 18; k++) {
+    g.strokeStyle = palAt(k * 0.07 - t * tr.shimmerSpeed, 0.5);
+    drawEllipse(g, L.r0 * (0.2 + 0.8 * k / 18), tr.ringWobble * 0.5, t);
+  }
+
+  // one ring per memory, newest outermost
+  for (let i = 0; i < n; i++) {
+    const age = ringBorn[i] ? clamp((now - ringBorn[i]) / 3200) : 1, hot = hovered === i;
+    for (let j = 0; j < lines; j++) {
+      let R = ringR(i, j);
+      if (age < 1) R = lerp(L.r0 * 0.3, R, easeOut(age));
+      g.lineWidth = hot ? 1.8 : 1.2 + (1 - age) * 1.5;
+      g.strokeStyle = hot ? rgba(C.colors.node, 0.95) : palAt(i * 0.21 + j * 0.06 - t * tr.shimmerSpeed, 0.85);
+      drawEllipse(g, R, tr.ringWobble, t);
     }
   }
 
-  if (phase === 'live') {
-    elapsed += dt;
-    if (elapsed >= EXPERIENCE_SECONDS) { phase = 'ending'; endTime = now; }
+  // faint contour lines spreading over the ground
+  const outer = ringR(n, 0);
+  g.lineWidth = 0.6;
+  for (let k = 0; k < tr.groundLines; k++) {
+    const R = outer + k * L.handSpan * 0.022 * (1 + k * 0.08);
+    g.strokeStyle = rgba(C.colors.ground, 0.22 * (1 - k / tr.groundLines));
+    drawEllipse(g, R, tr.ringWobble * 2, t);
   }
+  g.globalCompositeOperation = 'source-over';
+}
 
-  updateBreath(dt, now);
+function drawFx(t, now) {
+  fctx.clearRect(0, 0, W, H);
+  if (state === 'from' || state === 'ready') drawHeld(fctx, clamp((now - heldShown) / 600), true);
+  if (release) drawRelease(fctx, now, t);
+}
 
-  if (phase === 'live' && breath.exhaling && queue.length) {
-    // long, gentle exhales release more letters
-    const base = clamp(total / 35, 0.9, 5);
-    const rate = base * (0.5 + breath.intensity) * (0.6 + Math.min(breath.dur, 6) * 0.25);
-    releaseAcc += rate * dt;
-    while (releaseAcc >= 1 && queue.length) { releaseAcc -= 1; releaseLetter(false); }
+function updateGlow(t) {
+  let g = state === 'write' ? (bar.value ? 0.45 : 0.28)
+        : state === 'from' || state === 'ready' ? 0.85
+        : state === 'release' ? 0.15 : 0.2;
+  g = clamp(g + 0.06 * Math.sin(t * 1.6) + breath.glow * 0.45, 0, 1.5);
+  const c = hexRgb(C.colors.barGlow).join(',');
+  glow.style.boxShadow = `0 0 ${8 + g * 34}px ${2 + g * 9}px rgba(${c},${0.15 + g * 0.4}), inset 0 0 ${4 + g * 10}px rgba(${c},${0.2 + g * 0.4})`;
+  glow.style.background = `rgba(${c},${g * 0.2})`;
+}
+
+// ---------- hover ----------
+function hitTest(x, y) {
+  if (state === 'intro' || handOpaque(x, y)) return null;
+  let best = null, bd = Infinity;
+  L.branches.forEach((b, i) => {
+    for (const p of b.pts) {
+      const d = Math.hypot(p[0] - x, p[1] - y);
+      if (d < 10 && d < bd) { bd = d; best = i; }
+    }
+    const d = Math.hypot(b.x - x, b.y - y);
+    if (d < 16 && d < bd) { bd = d; best = i; }
+  });
+  if (best !== null) return best;
+  const fl = C.tree.ringFlatten, mid = (C.tree.ringLines - 1) / 2;
+  for (let i = 0; i < memories.length; i++) {
+    const R = ringR(i, mid), cy = ringY(R);
+    const d = Math.hypot(x - L.cx, (y - cy) / fl);
+    const e = Math.abs(d - R);
+    if (e < L.gap * 0.5 && e < bd) { bd = e; best = i; }
   }
-  if (phase === 'ending' && queue.length) {
-    // whatever is left drifts out softly as the bag sinks
-    releaseAcc += Math.max(1.5, queue.length / 5) * dt;
-    while (releaseAcc >= 1 && queue.length) { releaseAcc -= 1; releaseLetter(true); }
+  return best;
+}
+
+function showTip(i, x, y) {
+  if (i === hovered) { if (i !== null) moveTip(x, y); return; }
+  hovered = i;
+  if (i === null) { tip.style.opacity = 0; return; }
+  const m = memories[i];
+  tip.textContent = m.text;
+  if (m.from) {
+    const f = document.createElement('span');
+    f.className = 'from'; f.textContent = '— ' + m.from;
+    tip.appendChild(f);
   }
-  if (phase === 'ending' && !queue.length && !letters.length && now - endTime > 8) {
-    phase = 'done';
-    setTimeout(() => fadeIn($('#end')), 1500);
+  tip.lang = m.lang || '';
+  moveTip(x, y);
+  tip.style.opacity = 1;
+}
+function moveTip(x, y) {
+  const r = tip.getBoundingClientRect();
+  tip.style.left = clamp(x + 16, 8, W - r.width - 8) + 'px';
+  tip.style.top = clamp(y + 16, 8, H - r.height - 8) + 'px';
+}
+addEventListener('pointermove', e => showTip(hitTest(e.clientX, e.clientY), e.clientX, e.clientY));
+addEventListener('pointerdown', e => showTip(hitTest(e.clientX, e.clientY), e.clientX, e.clientY));
+
+// ---------- loop ----------
+const debugEl = $('debug');
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000), t = now / 1000;
+  last = now;
+  updateBreath(dt);
+  if ((state === 'from' || state === 'ready') && breath.active && held) beginRelease(now);
+  if (release) stepRelease(now, dt, t);
+  updateGlow(t);
+  drawTree(t, now);
+  drawFx(t, now);
+  if (DEBUG) {
+    debugEl.textContent = `mode ${breath.mode}  state ${state}\nlevel ${breath.level.toFixed(4)}\nbase  ${breath.base.toFixed(4)}\nthres ${breath.thresh.toFixed(4)}\nbreath ${breath.active ? 'YES' : 'no'}  strength ${breath.strength.toFixed(2)}`;
   }
-
-  const live = phase === 'live' || phase === 'ending' || phase === 'done';
-  if (live) { updateBag(dt, now); updateLetters(dt, now); }
-
-  ctx.clearRect(0, 0, W, H);
-  ctx.fillStyle = color('--horizon');
-  ctx.fillRect(0, horizonY, W, 1.5);
-  if (live) { drawBag(now); drawLetters(); }
-
   requestAnimationFrame(frame);
 }
 
-addEventListener('resize', resize);
-resize();
-requestAnimationFrame(frame);
-fadeIn($('#intro'));
-input.focus();
+// ---------- start ----------
+async function init() {
+  const root = document.documentElement.style, col = C.colors;
+  root.setProperty('--bg', col.background);
+  root.setProperty('--scan', col.scanline);
+  root.setProperty('--ink', col.ink);
+  root.setProperty('--ink-soft', col.inkSoft);
+  root.setProperty('--hint', col.hint);
+  root.setProperty('--tip', col.tip);
+  root.setProperty('--intro', col.intro);
+  handImg.style.filter = `brightness(${C.hand.brightness}) contrast(${C.hand.contrast})`;
+  introBtn.textContent = C.text.intro;
+  for (const [el, text] of [[introSub, C.text.introSub], [introAbout, C.text.introAbout]]) {
+    for (const line of text.split('\n')) el.appendChild(document.createElement('span')).textContent = line;
+  }
+  if (DEBUG) debugEl.style.display = 'block';
+
+  handImg.addEventListener('load', buildHandMask);
+  handImg.src = C.hand.image;
+  layout();
+  let resizeTimer;
+  addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(layout, 120); });
+  requestAnimationFrame(frame);
+
+  const [seeds, visitor] = [await loadSeeds(), loadVisitor()];
+  memories = seeds.concat(visitor);
+  visitorCount = visitor.length;
+  layoutTree();
+}
+
+introBtn.addEventListener('click', async () => {
+  introText.classList.add('gone');
+  calib.textContent = C.text.calibrating;
+  calib.style.opacity = 1;
+  const ok = await startMic();
+  if (ok) await calibrate(C.breath.calibrationMs); else await wait(1400);
+  calib.style.opacity = 0;
+  intro.style.opacity = 0;
+  intro.style.pointerEvents = 'none';
+  setTimeout(() => intro.remove(), 2600);
+  setState('write');
+  bar.focus();
+});
+
+init();
 </script>
 </body>
 </html>
