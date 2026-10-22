@@ -42,6 +42,22 @@
   }
   #tip .from { display: block; margin-top: .35em; opacity: .6; }
 
+  /* left panel: the meaning of the word */
+  #panel, #count {
+    position: fixed; z-index: 5; left: 64px; margin: 0;
+    font-family: 'Courier Prime', 'Courier New', monospace;
+    user-select: text; -webkit-user-select: text; cursor: default;
+  }
+  #panel { top: 50%; transform: translateY(-50%); max-width: 340px; color: var(--panel-body); }
+  #panel h1 { margin: 0 0 .3em; font: 400 88px/.9 'Courier Prime', 'Courier New', monospace; color: var(--panel-title); white-space: nowrap; }
+  #panel .say { margin: 0 0 1.4em; font-size: 14px; color: var(--panel-muted); }
+  #panel ol { margin: 0; padding: 0; list-style: none; font-size: 16px; line-height: 1.7; }
+  #panel ol b { font-weight: 400; color: var(--panel-num); }
+  #panel hr { width: 40px; height: 0; margin: 1.6em 0; border: 0; border-top: 1px solid var(--panel-line); }
+  #panel .how { margin: 0; font-size: 13px; line-height: 1.7; color: var(--panel-muted); }
+  #panel .how + .how { margin-top: 1em; }
+  #count { bottom: 24px; font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--panel-count); }
+
   #intro {
     position: fixed; inset: 0; z-index: 10; background: var(--bg);
     display: flex; align-items: center; justify-content: center; transition: opacity 2.4s ease;
@@ -57,16 +73,6 @@
     animation: inhale 6s ease-in-out infinite;
   }
   #intro button:focus-visible { outline: 1px solid var(--hint); outline-offset: 6px; }
-  #introSub {
-    margin: 1.6em 0 0; max-width: 52em; text-align: center;
-    font: 400 14px/1.7 'Special Elite', 'Courier New', monospace; color: var(--intro); opacity: .65;
-  }
-  #introSub span, #introAbout span { display: block; }
-  #introSub span + span, #introAbout span + span { margin-top: .9em; }
-  #introAbout {
-    margin: 2.2em 0 0; max-width: 40em; text-align: center;
-    font: 400 13px/1.75 'Special Elite', 'Courier New', monospace; color: var(--intro); opacity: .5;
-  }
   #calib {
     position: absolute; font: 400 18px 'Special Elite', 'Courier New', monospace; color: var(--intro);
     opacity: 0; transition: opacity 1.2s ease; pointer-events: none;
@@ -86,10 +92,22 @@
   <div id="glow"></div>
   <input id="bar" type="text" autocomplete="off" spellcheck="false" aria-label="memoria / memory">
   <canvas id="fx"></canvas>
+  <div id="panel">
+    <h1>aliento</h1>
+    <p class="say">a·lien·to · m.</p>
+    <ol>
+      <li><b>1.</b> respiración · breath</li>
+      <li><b>2.</b> ánimo, valor · encouragement</li>
+    </ol>
+    <hr>
+    <p class="how">escribe un recuerdo de alguien viejito en tu vida.<br>sopla para darle aliento.</p>
+    <p class="how" lang="en">write a memory of an elder in your life.<br>blow to give it breath.</p>
+  </div>
+  <p id="count"><span id="rings">0</span> anillos</p>
   <div id="hint"></div>
   <div id="tip"></div>
   <div id="intro">
-    <div id="introText"><button type="button"></button><p id="introSub"></p><p id="introAbout"></p></div>
+    <div id="introText"><button type="button"></button></div>
     <div id="calib"></div>
   </div>
   <div id="debug"></div>
@@ -112,6 +130,8 @@ const CONFIG = {
     brightness: 0.8,            // dims the photo a little so the tree can glow
     contrast: 1.08,
   },
+  handOpacity: 0.55,            // lets the tree and background read through the hand
+  panelGap: 32,                 // space kept between the left panel and the hand, in screen pixels
 
   // the glowing bar printed in the photo, where the visitor types
   bar: { x: 720, y: 1311, w: 520, h: 46 },
@@ -192,16 +212,17 @@ const CONFIG = {
     node: '#fff6e0',
     canopy: ['#5d6bd8', '#7f7cf0', '#9b8cff', '#b6a8ff', '#8fb4ff', '#d9d2ff', '#6b5fc8'],
     glyph: ['#ff4fd8', '#4ff0ff', '#fff36b', '#b9a4ff', '#ffffff'],
+    // left panel
+    panelTitle: '#f1eeff',
+    panelBody: '#d9d4ee',
+    panelNumber: '#b9b2ff',
+    panelMuted: '#9a94b8',
+    panelLine: '#4a4566',
+    panelCount: '#6f6990',
   },
 
   text: {
     intro: 'aliento',
-    introSub: 'en español, aliento es el aire que respiramos y también el ánimo que nos dan nuestros mayores\n' +
-              'in Spanish, aliento means both breath and the encouragement our elders give us',
-    introAbout: 'Aquí guardamos los recuerdos de nuestros mayores, estén vivos o no: un consejo o unas palabras que te dieron y que significan mucho para ti. ' +
-                'Escríbelas y sopla. Viajarán a un árbol digital que nos recuerda que sus palabras se quedan con nosotros para siempre. Nunca se van.\n' +
-                'This is a place for the memories of the elders in our lives, living or not: a piece of advice, or words they gave you that mean a lot. ' +
-                'Write them and blow. They travel to a digital tree that reminds us their words stay with us forever. They never leave.',
     calibrating: 'silencio… / quiet…',
     write: 'un recuerdo… / a memory…',
     from: '¿de quién? / from whom?',
@@ -224,7 +245,8 @@ const C = CONFIG;
 const $ = id => document.getElementById(id);
 const treeCv = $('tree'), fxCv = $('fx'), handImg = $('hand'), bar = $('bar'), glow = $('glow');
 const hint = $('hint'), tip = $('tip'), intro = $('intro'), introBtn = intro.querySelector('button'), calib = $('calib');
-const introText = $('introText'), introSub = $('introSub'), introAbout = $('introAbout');
+const introText = $('introText');
+const panel = $('panel'), countEl = $('count'), ringsEl = $('rings');
 const tctx = treeCv.getContext('2d'), fctx = fxCv.getContext('2d');
 const DEBUG = new URLSearchParams(location.search).has('debug');
 
@@ -345,6 +367,11 @@ function layout() {
   L.s = s; L.hw = IW * s; L.hh = IH * s;
   L.hx = W * C.hand.centerX - (sl + sr) / 2 * s;
   L.hy = H - L.hh;
+  // keep the hand clear of the left panel: nudge it right, or hide the panel if the screen is too narrow
+  panel.hidden = countEl.hidden = false;
+  const room = Math.max(panel.getBoundingClientRect().right, panel.querySelector('h1').getBoundingClientRect().right) + C.panelGap;
+  L.hx += clamp(room - (L.hx + sl * s), 0, Math.max(0, W - 8 - (L.hx + sr * s)));
+  panel.hidden = countEl.hidden = L.hx + sl * s < room;
   place(handImg, { x: L.hx, y: L.hy, w: L.hw, h: L.hh });
   L.handSpan = (sr - sl) * s;
 
@@ -373,6 +400,7 @@ function layoutTree() {
   const t = C.tree, n = Math.max(memories.length + 1, 1);
   L.gap = Math.min(L.handSpan * t.ringGap, Math.max(4, (W * t.ringReach - L.r0) / n));
   L.branches = memories.map((m, i) => branchGeom(m, i));
+  ringsEl.textContent = memories.length;
   buildCanopy();
 }
 
@@ -989,11 +1017,15 @@ async function init() {
   root.setProperty('--hint', col.hint);
   root.setProperty('--tip', col.tip);
   root.setProperty('--intro', col.intro);
+  root.setProperty('--panel-title', col.panelTitle);
+  root.setProperty('--panel-body', col.panelBody);
+  root.setProperty('--panel-num', col.panelNumber);
+  root.setProperty('--panel-muted', col.panelMuted);
+  root.setProperty('--panel-line', col.panelLine);
+  root.setProperty('--panel-count', col.panelCount);
   handImg.style.filter = `brightness(${C.hand.brightness}) contrast(${C.hand.contrast})`;
+  handImg.style.opacity = C.handOpacity;
   introBtn.textContent = C.text.intro;
-  for (const [el, text] of [[introSub, C.text.introSub], [introAbout, C.text.introAbout]]) {
-    for (const line of text.split('\n')) el.appendChild(document.createElement('span')).textContent = line;
-  }
   if (DEBUG) debugEl.style.display = 'block';
 
   handImg.addEventListener('load', buildHandMask);
@@ -1001,6 +1033,7 @@ async function init() {
   layout();
   let resizeTimer;
   addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(layout, 120); });
+  document.fonts.ready.then(layout); // the panel's width is only final once Courier Prime has loaded
   requestAnimationFrame(frame);
 
   const [seeds, visitor] = [await loadSeeds(), loadVisitor()];
